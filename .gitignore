@@ -19,3 +19,4 @@ app-logo/
 
 # Locks optional
 .bun
+.env.local.secrets-backup.txt
