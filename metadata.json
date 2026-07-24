@@ -1,0 +1,9 @@
+{
+  "name": "ShadowGuard - Shadvert",
+  "description": "Bezpečnostní štít a rychlá prověrka inzerátů, e-shopů a online nabídek pro seniory i rodinné experty.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

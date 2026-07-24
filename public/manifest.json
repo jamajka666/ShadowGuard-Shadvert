@@ -1,0 +1,32 @@
+{
+  "short_name": "Shadvert",
+  "name": "ShadowGuard Shadvert — Kontrola inzerátů",
+  "description": "Bezpečnostní prověrka inzerátů a nabídek pro tátu i celou rodinu.",
+  "icons": [
+    {
+      "src": "/brand/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0A0A0C",
+  "theme_color": "#B8860B",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "cs",
+  "categories": ["security", "utilities", "shopping"]
+}

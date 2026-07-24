@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+@keyframes cyber-pulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(6, 182, 212, 0.3), 0 0 30px rgba(6, 182, 212, 0.15);
+    border-color: rgba(6, 182, 212, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(6, 182, 212, 0.6), 0 0 50px rgba(6, 182, 212, 0.3);
+    border-color: rgba(6, 182, 212, 0.9);
+  }
+}
+
+@keyframes cyber-pulse-rose {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(244, 63, 94, 0.4), 0 0 30px rgba(244, 63, 94, 0.2);
+    border-color: rgba(244, 63, 94, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(244, 63, 94, 0.7), 0 0 60px rgba(244, 63, 94, 0.4);
+    border-color: rgba(244, 63, 94, 1);
+  }
+}
+
+@keyframes cyber-pulse-emerald {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.3), 0 0 30px rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.6), 0 0 50px rgba(16, 185, 129, 0.3);
+    border-color: rgba(16, 185, 129, 0.9);
+  }
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(1000%);
+  }
+}
+
+@keyframes neon-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.cyber-card-glow {
+  animation: cyber-pulse 4s ease-in-out infinite;
+}
+
+.cyber-card-scam {
+  animation: cyber-pulse-rose 3s ease-in-out infinite;
+}
+
+.cyber-card-safe {
+  animation: cyber-pulse-emerald 4s ease-in-out infinite;
+}
+
+.cyber-button-glow {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cyber-button-glow:hover {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.6), 0 0 40px rgba(6, 182, 212, 0.3);
+  transform: translateY(-2px) scale(1.02);
+}
+
+.cyber-button-emerald:hover {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.6), 0 0 40px rgba(16, 185, 129, 0.3);
+  transform: translateY(-2px) scale(1.02);
+}
+
+.cyber-grid-bg {
+  background-image: 
+    linear-gradient(to right, rgba(6, 182, 212, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(6, 182, 212, 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.neon-text-cyan {
+  text-shadow: 0 0 8px rgba(6, 182, 212, 0.6), 0 0 20px rgba(6, 182, 212, 0.3);
+}
+
+.neon-text-emerald {
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.6), 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.neon-text-rose {
+  text-shadow: 0 0 8px rgba(244, 63, 94, 0.6), 0 0 20px rgba(244, 63, 94, 0.3);
+}
+
+/* ShadowGuard Bronze & Black Marble Styles */
+.shadowguard-marble-bg {
+  background-color: #121214;
+  background-image: 
+    radial-gradient(circle at 15% 20%, rgba(212, 160, 23, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 85% 80%, rgba(0, 245, 255, 0.06) 0%, transparent 40%),
+    linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(18, 18, 20, 0.98) 100%),
+    linear-gradient(to right, rgba(205, 127, 50, 0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 48px 48px;
+}
+
+.shadowguard-bronze-border {
+  border-color: #D4A017;
+  box-shadow: 0 0 15px rgba(212, 160, 23, 0.25), inset 0 0 15px rgba(212, 160, 23, 0.1);
+}
+
+.shadowguard-bronze-glow {
+  box-shadow: 0 0 20px rgba(212, 160, 23, 0.35), 0 0 40px rgba(205, 127, 50, 0.2);
+}
+
+.shadowguard-cyan-glow {
+  box-shadow: 0 0 15px rgba(0, 245, 255, 0.5), 0 0 30px rgba(0, 245, 255, 0.25);
+}
+
+.shadowguard-text-gold {
+  color: #E6B800;
+  text-shadow: 0 0 10px rgba(230, 184, 0, 0.4);
+}
+
+.shadowguard-text-cyan {
+  color: #00F5FF;
+  text-shadow: 0 0 10px rgba(0, 245, 255, 0.6);
+}
+

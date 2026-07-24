@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0A0A0C" />
+      <stop offset="50%" stop-color="#121214" />
+      <stop offset="100%" stop-color="#050507" />
+    </linearGradient>
+
+    <linearGradient id="goldRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F5D061" />
+      <stop offset="30%" stop-color="#E6B800" />
+      <stop offset="65%" stop-color="#B8860B" />
+      <stop offset="100%" stop-color="#8B5A2B" />
+    </linearGradient>
+
+    <linearGradient id="darkMarble" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1F1F24" />
+      <stop offset="50%" stop-color="#121215" />
+      <stop offset="100%" stop-color="#08080A" />
+    </linearGradient>
+
+    <filter id="eyeGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="goldGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background Card -->
+  <rect width="512" height="512" rx="120" fill="url(#bgGrad)" stroke="#B8860B" stroke-width="4" />
+
+  <!-- Outer Golden Shield Rim -->
+  <path d="M256 40 L440 100 C440 280 370 410 256 460 C142 410 72 280 72 100 Z" fill="url(#goldRim)" filter="url(#goldGlow)" />
+
+  <!-- Inner Dark Marble Shield -->
+  <path d="M256 65 L415 118 C415 270 355 385 256 430 C157 385 97 270 97 118 Z" fill="url(#darkMarble)" stroke="#8B5A2B" stroke-width="3" />
+
+  <!-- Gold Marble Veins -->
+  <path d="M140 150 Q220 200 200 300 T330 390" stroke="#D4AF37" stroke-width="2.5" opacity="0.45" fill="none" />
+  <path d="M370 140 Q290 220 330 320" stroke="#E6B800" stroke-width="2" opacity="0.35" fill="none" />
+
+  <!-- Hooded Guard Silhouette -->
+  <path d="M256 160 C190 160 160 205 160 275 C160 340 195 380 256 400 C317 380 352 340 352 275 C352 205 322 160 256 160 Z" fill="#040406" />
+  <path d="M256 160 Q170 160 165 260 Q210 230 256 240 Q302 230 347 260 Q342 160 256 160 Z" fill="#121216" stroke="#B8860B" stroke-width="2" />
+
+  <!-- Glowing Cyan Eyes -->
+  <ellipse cx="210" cy="250" rx="20" ry="9" fill="#00F5FF" filter="url(#eyeGlow)" transform="rotate(-6 210 250)" />
+  <ellipse cx="302" cy="250" rx="20" ry="9" fill="#00F5FF" filter="url(#eyeGlow)" transform="rotate(6 302 250)" />
+  <ellipse cx="210" cy="250" rx="6" ry="3" fill="#FFFFFF" />
+  <ellipse cx="302" cy="250" rx="6" ry="3" fill="#FFFFFF" />
+</svg>

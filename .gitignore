@@ -1,0 +1,21 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Runtime family DB & secrets
+data/*.json
+!data/.gitkeep
+
+# Raw heavy brand sources (optimized copies live in public/brand)
+app-logo/
+*.zip
+
+# Locks optional
+.bun
