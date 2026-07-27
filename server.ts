@@ -1230,7 +1230,11 @@ Vrať 4 až 5 nejvýznamnějších aktuálních varování ve formátu JSON podl
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        // Cloudflare Tunnel / trycloudflare.com hostnames
+        allowedHosts: true,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

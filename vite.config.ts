@@ -14,6 +14,8 @@ export default defineConfig(() => {
     server: {
       hmr: false,
       watch: null,
+      // Allow Cloudflare Tunnel hosts (*.trycloudflare.com and custom domain)
+      allowedHosts: true,
     },
   };
 });
