@@ -1245,14 +1245,38 @@ function cleanAndParseJson<T = any>(rawText: string): T {
 
 // P1-2: in-memory cache for scam alerts (cuts Gemini cost / abuse)
 const SCAM_ALERTS_TTL_MS = Number(process.env.SCAM_ALERTS_CACHE_TTL_MS) || 30 * 60 * 1000;
-let scamAlertsCache: { payload: unknown; expiresAt: number } | null = null;
+const SCAM_ALERTS_ERROR_TTL_MS = Number(process.env.SCAM_ALERTS_ERROR_CACHE_TTL_MS) || 5 * 60 * 1000;
+const SCAM_ALERTS_TIMEOUT_MS = Number(process.env.SCAM_ALERTS_TIMEOUT_MS) || 12_000;
+let scamAlertsCache: { payload: unknown; expiresAt: number; source: string } | null = null;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
 
 // API Endpoint for Live Google Search Grounded Scam Alerts
 app.get('/api/scam-alerts', heavyLimiter, async (req, res) => {
   try {
     if (scamAlertsCache && scamAlertsCache.expiresAt > Date.now()) {
       res.setHeader('X-Cache', 'HIT');
-      return res.json(scamAlertsCache.payload);
+      res.setHeader('X-Cache-Source', scamAlertsCache.source);
+      // mark as cached for clients without changing alerts content
+      const body =
+        scamAlertsCache.payload && typeof scamAlertsCache.payload === 'object'
+          ? { ...(scamAlertsCache.payload as object), cached: true, cacheSource: scamAlertsCache.source }
+          : scamAlertsCache.payload;
+      return res.json(body);
     }
 
     const ai = getGeminiClient();
@@ -1263,8 +1287,13 @@ app.get('/api/scam-alerts', heavyLimiter, async (req, res) => {
         lastUpdated: new Date().toLocaleDateString('cs-CZ'),
         isLiveGrounding: false,
         cached: false,
+        cacheSource: 'no-key',
       };
-      scamAlertsCache = { payload, expiresAt: Date.now() + Math.min(SCAM_ALERTS_TTL_MS, 10 * 60 * 1000) };
+      scamAlertsCache = {
+        payload,
+        expiresAt: Date.now() + Math.min(SCAM_ALERTS_TTL_MS, 10 * 60 * 1000),
+        source: 'no-key',
+      };
       res.setHeader('X-Cache', 'MISS-FALLBACK');
       return res.json(payload);
     }
@@ -1277,39 +1306,43 @@ KRITICKÉ PRAVIDLO FORMÁTU: Vrátíš VÝHRADNĚ platný JSON objekt bez jakéh
     const promptText = `Pomocí živého vyhledávání Google zjisti nejnovější hrozby a aktuální varování před podvody v inzerátech, e-shopech a internetovém nákupu/prodeji v České republice (aktuální zprávy Policie ČR, ČOI, ČBA, Zásilkovny).
 Vrať 4 až 5 nejvýznamnějších aktuálních varování ve formátu JSON podle schématu.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
-      contents: promptText,
-      config: {
-        systemInstruction,
-        tools: [{ googleSearch: {} }],
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            alerts: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  title: { type: Type.STRING, description: 'Hlavní název varování v češtině' },
-                  summary: { type: Type.STRING, description: 'Podrobný popis podvodného triku a postupu podvodníků' },
-                  riskCategory: { type: Type.STRING, description: 'Kategorie (např. Bazarový prodej, Falešné e-shopy, Phishing, Bankovní podvody)' },
-                  severity: { type: Type.STRING, description: "'VYSOKE', 'STREDNI', nebo 'NIZKE'" },
-                  date: { type: Type.STRING, description: 'Datum nebo období varování (např. Aktuální varování 2026)' },
-                  recommendedAction: { type: Type.STRING, description: 'Jasná rada jak se bezpečně chránit' },
-                  sourceTitle: { type: Type.STRING, description: 'Název zdroje nebo instituce (např. Policie ČR, ČOI, Zásilkovna)' },
-                  sourceUrl: { type: Type.STRING, description: 'Odkaz na zprávu nebo oficiální web' },
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: promptText,
+        config: {
+          systemInstruction,
+          tools: [{ googleSearch: {} }],
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              alerts: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    title: { type: Type.STRING, description: 'Hlavní název varování v češtině' },
+                    summary: { type: Type.STRING, description: 'Podrobný popis podvodného triku a postupu podvodníků' },
+                    riskCategory: { type: Type.STRING, description: 'Kategorie (např. Bazarový prodej, Falešné e-shopy, Phishing, Bankovní podvody)' },
+                    severity: { type: Type.STRING, description: "'VYSOKE', 'STREDNI', nebo 'NIZKE'" },
+                    date: { type: Type.STRING, description: 'Datum nebo období varování (např. Aktuální varování 2026)' },
+                    recommendedAction: { type: Type.STRING, description: 'Jasná rada jak se bezpečně chránit' },
+                    sourceTitle: { type: Type.STRING, description: 'Název zdroje nebo instituce (např. Policie ČR, ČOI, Zásilkovna)' },
+                    sourceUrl: { type: Type.STRING, description: 'Odkaz na zprávu nebo oficiální web' },
+                  },
+                  required: ['id', 'title', 'summary', 'riskCategory', 'severity', 'recommendedAction'],
                 },
-                required: ['id', 'title', 'summary', 'riskCategory', 'severity', 'recommendedAction'],
               },
             },
+            required: ['alerts'],
           },
-          required: ['alerts'],
         },
-      },
-    });
+      }),
+      SCAM_ALERTS_TIMEOUT_MS,
+      'scam-alerts Gemini'
+    );
 
     const text = response.text;
     if (text) {
@@ -1341,9 +1374,11 @@ Vrať 4 až 5 nejvýznamnějších aktuálních varování ve formátu JSON podl
         groundingSources: groundingSources.length > 0 ? groundingSources : undefined,
         isLiveGrounding: true,
         cached: false,
+        cacheSource: 'live',
       };
-      scamAlertsCache = { payload, expiresAt: Date.now() + SCAM_ALERTS_TTL_MS };
+      scamAlertsCache = { payload, expiresAt: Date.now() + SCAM_ALERTS_TTL_MS, source: 'live' };
       res.setHeader('X-Cache', 'MISS');
+      res.setHeader('X-Cache-Source', 'live');
       return res.json(payload);
     }
 
@@ -1352,8 +1387,13 @@ Vrať 4 až 5 nejvýznamnějších aktuálních varování ve formátu JSON podl
       lastUpdated: new Date().toLocaleDateString('cs-CZ'),
       isLiveGrounding: false,
       cached: false,
+      cacheSource: 'empty',
     };
-    scamAlertsCache = { payload, expiresAt: Date.now() + Math.min(SCAM_ALERTS_TTL_MS, 10 * 60 * 1000) };
+    scamAlertsCache = {
+      payload,
+      expiresAt: Date.now() + Math.min(SCAM_ALERTS_TTL_MS, 10 * 60 * 1000),
+      source: 'empty',
+    };
     res.setHeader('X-Cache', 'MISS-EMPTY');
     return res.json(payload);
   } catch (err: any) {
@@ -1363,10 +1403,13 @@ Vrať 4 až 5 nejvýznamnějších aktuálních varování ve formátu JSON podl
       lastUpdated: new Date().toLocaleDateString('cs-CZ'),
       isLiveGrounding: false,
       cached: false,
+      cacheSource: 'error',
+      errorNote: 'Živá varování teď nejsou dostupná — ukazujeme ověřený lokální seznam.',
     };
-    // short cache on failure to avoid hammering Gemini
-    scamAlertsCache = { payload, expiresAt: Date.now() + 5 * 60 * 1000 };
+    // short cache on failure to avoid hammering Gemini (still serves users fast on next hit)
+    scamAlertsCache = { payload, expiresAt: Date.now() + SCAM_ALERTS_ERROR_TTL_MS, source: 'error' };
     res.setHeader('X-Cache', 'MISS-ERROR');
+    res.setHeader('X-Cache-Source', 'error');
     return res.json(payload);
   }
 });
