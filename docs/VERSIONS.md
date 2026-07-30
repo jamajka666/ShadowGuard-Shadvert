@@ -51,4 +51,16 @@ Dole v patičce:
 
 ---
 
+## Časová osa (2026-07 / 08)
+
+| Kdy | Co |
+|-----|-----|
+| Live teď | First Creation + lab — stabilní pro instalaci tátovi |
+| Příští týden | Instalace tátovi (CR); zakladatel DE |
+| + cca týden | Start sběru dat (lab + reálné použití) |
+| Paralelně | Vývoj **pouze** na `ui/design-v2` — viz `docs/DESIGN-V2-BRIEF.md` (na té větvi) |
+| Později | Nasazení nové generace tátovi jen po rozhodnutí v Book of Decisions |
+
+---
+
 *Aktualizováno 2026-07-30 — Grok Build + zakladatel*
