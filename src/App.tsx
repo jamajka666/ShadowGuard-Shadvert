@@ -16,6 +16,7 @@ import { WelcomeSplash } from './components/WelcomeSplash';
 import { RiskLevelToast } from './components/RiskLevelToast';
 import { FamilySettingsCard } from './components/FamilySettingsCard';
 import { AdminPanel } from './components/AdminPanel';
+import { DesignLabFooter } from './components/DesignLabModals';
 import { VoiceCommandHandlers } from './utils/voiceCommands';
 import { speakText } from './utils/tts';
 import { useFamilySync } from './hooks/useFamilySync';
@@ -458,13 +459,15 @@ export default function App() {
       >
         <div className="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="flex items-center gap-1 font-medium">
-            <span>ShadowGuard Shadvert — Vytvořeno s péčí pro otce a celou rodinu</span>
+            <span>ShadowGuard Shadvert — First Creation · s péčí pro otce a rodinu</span>
             <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
           </p>
           <p className="text-slate-500">
             AI Google Gemini · <a href="/admin" className="text-cyan-600 hover:underline">Admin</a>
           </p>
         </div>
+        {/* Lab: swatches + survey — does not change dad's main path */}
+        <DesignLabFooter themeMode={themeMode} />
       </footer>
     </div>
   );
