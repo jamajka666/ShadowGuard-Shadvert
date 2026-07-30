@@ -30,11 +30,32 @@ const FAMILY_DB_PATH = path.join(DATA_DIR, 'family.json');
 
 // Security baseline (SGW-005): hide stack fingerprint, set safe headers
 app.disable('x-powered-by');
+const isProd = process.env.NODE_ENV === 'production';
 app.use(
   helmet({
-    // SPA + Vite assets: full CSP tuned later; other Helmet defaults stay on
-    contentSecurityPolicy: false,
+    // Production SPA: allow self + inline styles (Tailwind runtime); no arbitrary script hosts
+    contentSecurityPolicy: isProd
+      ? {
+          useDefaults: true,
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+            mediaSrc: ["'self'", 'blob:'],
+            connectSrc: ["'self'"],
+            fontSrc: ["'self'", 'data:'],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            frameAncestors: ["'none'"],
+            upgradeInsecureRequests: [],
+          },
+        }
+      : false,
     crossOriginEmbedderPolicy: false,
+    // HSTS: CF terminates TLS; still good on origin responses
+    hsts: isProd ? { maxAge: 15552000, includeSubDomains: false } : false,
   })
 );
 
@@ -284,6 +305,8 @@ async function checkSSLCertificate(
         host,
         port: 443,
         servername: hostname,
+        // P2-2: false = still inspect cert of untrusted hosts (audit, not mutual trust).
+        // Never use this socket for forwarding user traffic.
         rejectUnauthorized: false,
         timeout: 4000,
       },
@@ -452,7 +475,8 @@ async function getFullDomainSSLInfo(urlOrHostname: string) {
   }
 
   const safe = await assertSafePublicHost(domain);
-  if (!safe.ok) {
+  if (safe.ok === false) {
+    const blockReason = safe.reason;
     return {
       domain,
       isSslValid: false,
@@ -463,9 +487,9 @@ async function getFullDomainSSLInfo(urlOrHostname: string) {
       ipAddress: '—',
       country: '—',
       trustScore: 10,
-      warnings: [`🛡️ ${safe.reason}`],
+      warnings: [`🛡️ ${blockReason}`],
       checkedAt: new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }),
-      error: safe.reason,
+      error: blockReason,
       blockedBySsrfGuard: true,
     };
   }
@@ -711,6 +735,20 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
     if (!url && !rawText && !imageBase64) {
       return res.status(400).json({
         error: 'Chybí zadání. Vložte prosím odkaz na inzerát, text nebo snímek obrazovky.',
+      });
+    }
+
+    // P2-1: cap base64 image size (~1.5MB string ≈ ~1MB binary) even if JSON body limit is higher
+    const maxImageChars = Number(process.env.MAX_IMAGE_BASE64_CHARS) || 1_500_000;
+    if (typeof imageBase64 === 'string' && imageBase64.length > maxImageChars) {
+      return res.status(413).json({
+        error: 'Snímek je příliš velký. Zkuste menší foto nebo oříznutý screenshot.',
+      });
+    }
+
+    if (typeof rawText === 'string' && rawText.length > 50_000) {
+      return res.status(413).json({
+        error: 'Text je příliš dlouhý. Vložte prosím kratší úryvek inzerátu.',
       });
     }
 
@@ -1205,17 +1243,30 @@ function cleanAndParseJson<T = any>(rawText: string): T {
   }
 }
 
+// P1-2: in-memory cache for scam alerts (cuts Gemini cost / abuse)
+const SCAM_ALERTS_TTL_MS = Number(process.env.SCAM_ALERTS_CACHE_TTL_MS) || 30 * 60 * 1000;
+let scamAlertsCache: { payload: unknown; expiresAt: number } | null = null;
+
 // API Endpoint for Live Google Search Grounded Scam Alerts
 app.get('/api/scam-alerts', heavyLimiter, async (req, res) => {
   try {
+    if (scamAlertsCache && scamAlertsCache.expiresAt > Date.now()) {
+      res.setHeader('X-Cache', 'HIT');
+      return res.json(scamAlertsCache.payload);
+    }
+
     const ai = getGeminiClient();
 
     if (!ai) {
-      return res.json({
+      const payload = {
         alerts: fallbackScamAlerts,
         lastUpdated: new Date().toLocaleDateString('cs-CZ'),
         isLiveGrounding: false,
-      });
+        cached: false,
+      };
+      scamAlertsCache = { payload, expiresAt: Date.now() + Math.min(SCAM_ALERTS_TTL_MS, 10 * 60 * 1000) };
+      res.setHeader('X-Cache', 'MISS-FALLBACK');
+      return res.json(payload);
     }
 
     const systemInstruction = `Jsi specializovaný bezpečnostní systém hlídající kybernetické hrozby a internetové podvody v České republice.
@@ -1278,7 +1329,7 @@ Vrať 4 až 5 nejvýznamnějších aktuálních varování ve formátu JSON podl
         }
       }
 
-      return res.json({
+      const payload = {
         alerts: parsed.alerts || fallbackScamAlerts,
         lastUpdated: new Date().toLocaleDateString('cs-CZ', {
           day: 'numeric',
@@ -1289,21 +1340,34 @@ Vrať 4 až 5 nejvýznamnějších aktuálních varování ve formátu JSON podl
         }),
         groundingSources: groundingSources.length > 0 ? groundingSources : undefined,
         isLiveGrounding: true,
-      });
+        cached: false,
+      };
+      scamAlertsCache = { payload, expiresAt: Date.now() + SCAM_ALERTS_TTL_MS };
+      res.setHeader('X-Cache', 'MISS');
+      return res.json(payload);
     }
 
-    return res.json({
+    const payload = {
       alerts: fallbackScamAlerts,
       lastUpdated: new Date().toLocaleDateString('cs-CZ'),
       isLiveGrounding: false,
-    });
+      cached: false,
+    };
+    scamAlertsCache = { payload, expiresAt: Date.now() + Math.min(SCAM_ALERTS_TTL_MS, 10 * 60 * 1000) };
+    res.setHeader('X-Cache', 'MISS-EMPTY');
+    return res.json(payload);
   } catch (err: any) {
     console.warn('Scam alerts search grounding failed, returning fallback alerts:', err?.message || err);
-    return res.json({
+    const payload = {
       alerts: fallbackScamAlerts,
       lastUpdated: new Date().toLocaleDateString('cs-CZ'),
       isLiveGrounding: false,
-    });
+      cached: false,
+    };
+    // short cache on failure to avoid hammering Gemini
+    scamAlertsCache = { payload, expiresAt: Date.now() + 5 * 60 * 1000 };
+    res.setHeader('X-Cache', 'MISS-ERROR');
+    return res.json(payload);
   }
 });
 
@@ -1314,7 +1378,7 @@ async function startServer() {
       server: {
         middlewareMode: true,
         // Cloudflare Tunnel / trycloudflare.com hostnames
-        allowedHosts: true,
+        allowedHosts: true as true,
       },
       appType: 'spa',
     });
