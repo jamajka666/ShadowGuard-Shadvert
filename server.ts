@@ -3,6 +3,9 @@ import path from 'path';
 import fs from 'fs';
 import tls from 'tls';
 import dns from 'dns';
+import crypto from 'crypto';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
@@ -24,7 +27,34 @@ const FAMILY_CODE = process.env.FAMILY_CODE || '';
 const DATA_DIR = path.join(process.cwd(), 'data');
 const FAMILY_DB_PATH = path.join(DATA_DIR, 'family.json');
 
-app.use(express.json({ limit: '10mb' }));
+// Security baseline (SGW-005): hide stack fingerprint, set safe headers
+app.disable('x-powered-by');
+app.use(
+  helmet({
+    // SPA + Vite assets: full CSP tuned later; other Helmet defaults stay on
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// JSON body: 2mb default; analyze with images still needs headroom but not unbounded 10mb abuse
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '2mb' }));
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_API_MAX) || 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Příliš mnoho požadavků. Zkuste to prosím za chvíli.' },
+});
+const heavyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_HEAVY_MAX) || 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Příliš mnoho kontrol najednou. Počkejte chvíli a zkuste znovu.' },
+});
+app.use('/api/', apiLimiter);
 
 // --- Family / remote management store ---
 interface FamilyDevice {
@@ -85,10 +115,21 @@ function saveFamilyDb(db: FamilyDb) {
   fs.writeFileSync(FAMILY_DB_PATH, JSON.stringify(db, null, 2), 'utf8');
 }
 
+function timingSafeEqualString(a: string, b: string): boolean {
+  try {
+    const ba = Buffer.from(a, 'utf8');
+    const bb = Buffer.from(b, 'utf8');
+    if (ba.length !== bb.length) return false;
+    return crypto.timingSafeEqual(ba, bb);
+  } catch {
+    return false;
+  }
+}
+
 function requireAdmin(req: express.Request, res: express.Response): boolean {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : (req.headers['x-admin-token'] as string) || '';
-  if (!ADMIN_TOKEN || token !== ADMIN_TOKEN) {
+  if (!ADMIN_TOKEN || !token || !timingSafeEqualString(token, ADMIN_TOKEN)) {
     res.status(401).json({ error: 'Neplatný admin token' });
     return false;
   }
@@ -97,7 +138,8 @@ function requireAdmin(req: express.Request, res: express.Response): boolean {
 
 function familyCodeOk(code?: string): boolean {
   if (!FAMILY_CODE) return false;
-  return Boolean(code && code.trim() === FAMILY_CODE);
+  if (!code || typeof code !== 'string') return false;
+  return timingSafeEqualString(code.trim(), FAMILY_CODE);
 }
 
 // Public config for clients (force update)
@@ -116,8 +158,11 @@ app.post('/api/family/heartbeat', (req, res) => {
   if (!deviceId || typeof deviceId !== 'string') {
     return res.status(400).json({ error: 'Chybí deviceId' });
   }
-  // Optional: only register when family code matches (if set on server)
-  if (FAMILY_CODE && familyCode && !familyCodeOk(familyCode)) {
+  // P0-1 (SGW-005): always require valid FAMILY_CODE when configured — omit must not bypass
+  if (!FAMILY_CODE) {
+    return res.status(503).json({ error: 'Rodinný sync není na serveru nakonfigurován' });
+  }
+  if (!familyCodeOk(familyCode)) {
     return res.status(403).json({ error: 'Neplatný rodinný kód' });
   }
   const db = loadFamilyDb();
@@ -623,7 +668,7 @@ const createFallbackResult = (
 };
 
 // API Endpoint for Analyzing Advertisements
-app.post('/api/analyze-ad', async (req, res) => {
+app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
   try {
     const { url = '', rawText = '', imageBase64, userNote = '' } = req.body;
 
@@ -944,7 +989,7 @@ Zkontroluj zejména:
 });
 
 // Standalone API endpoint to check SSL certificate and domain info directly
-app.post('/api/check-domain-ssl', async (req, res) => {
+app.post('/api/check-domain-ssl', heavyLimiter, async (req, res) => {
   try {
     const { url = '' } = req.body || {};
     if (!url || typeof url !== 'string' || url.trim().length < 3) {
@@ -1125,7 +1170,7 @@ function cleanAndParseJson<T = any>(rawText: string): T {
 }
 
 // API Endpoint for Live Google Search Grounded Scam Alerts
-app.get('/api/scam-alerts', async (req, res) => {
+app.get('/api/scam-alerts', heavyLimiter, async (req, res) => {
   try {
     const ai = getGeminiClient();
 
