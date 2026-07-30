@@ -121,6 +121,28 @@ Na větvi `ui/design-v2` (ne na live):
 
 ---
 
+## Review (Gemini + Grok) — 2026-07-30
+
+| Zdroj | Verdikt |
+|-------|---------|
+| **Gemini** | Směr SGF-007 v praxi; hierarchie a lidskost OK |
+| **Grok** | Použitelný základ; doladit kontrast varování, vzduch, hierarchii akcí |
+
+### Zapracováno (polish v1)
+
+- [x] Silnější klidná saturace badge **Opatrnost** / **Podvod**  
+- [x] Hlavní věta u Podvodu s vyšší váhou písma  
+- [x] Blok **Co teď** u Podvodu výraznější (okraj + inset akcent)  
+- [x] „Zkontrolovat jiný inzerát“ o stupeň tišší než primární tlačítko  
+- [x] Víc vzduchu mezi sekcemi (gap ~24–28px)
+
+### Volitelně později
+
+- [ ] Konkrétní úpravy textů podle labu  
+- [ ] Kontrola na starším Androidu / slabším displeji  
+
+---
+
 ## Co ještě není (další iterace)
 
 - [ ] Vstupní obrazovka Jednoduchý (jedno pole + Ověřit)  
@@ -131,4 +153,4 @@ Na větvi `ui/design-v2` (ne na live):
 
 ---
 
-*ChatGPT podklad + Grok Build implementace kostry, 2026-07-30*
+*ChatGPT podklad + Grok Build kostra + polish dle Grok/Gemini review, 2026-07-30*
