@@ -17,6 +17,7 @@ import { RiskLevelToast } from './components/RiskLevelToast';
 import { FamilySettingsCard } from './components/FamilySettingsCard';
 import { AdminPanel } from './components/AdminPanel';
 import { DesignLabFooter } from './components/DesignLabModals';
+import { DesignV2Sandbox } from './design-v2/DesignV2Sandbox';
 import { VoiceCommandHandlers } from './utils/voiceCommands';
 import { speakText } from './utils/tts';
 import { useFamilySync } from './hooks/useFamilySync';
@@ -27,6 +28,10 @@ export default function App() {
   // Admin route (no react-router needed)
   if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
     return <AdminPanel />;
+  }
+  // Design-v2 sandbox only (Calm Security preview) — not First Creation default
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/design-v2')) {
+    return <DesignV2Sandbox />;
   }
   // Accessibility & Theme state
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>('large');

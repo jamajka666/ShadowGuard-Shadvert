@@ -117,9 +117,11 @@ Stejná hierarchie pro všechny tři stavy:
 ## 7. Reference
 
 - SGF-007 Design Principles
+- SGF-012 Evolution Principles
 - Vizuální rozhodnutí z 2026-07-30 (světlá klidná zelená)
 - `AI_komunikace/grok-build-mezi-nami/2026-07-30_vizual-navrhy-nazor.md`
 - First Creation: `docs/VERSIONS.md`, D-019
+- **Výsledková karta (podklad + kód):** `docs/SIMPLE-RESULT-CARD.md` · `src/design-v2/` · náhled `/design-v2`
 
 ---
 
