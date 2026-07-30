@@ -10,6 +10,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import { checkPhishingUrl } from './src/utils/phishingValidator';
+import { assertSafePublicHost } from './src/utils/ssrfGuard';
 
 // Load .env then .env.local (local overrides), but never clobber NODE_ENV from the shell
 const shellNodeEnv = process.env.NODE_ENV;
@@ -258,7 +259,11 @@ function extractDomain(inputUrl: string): string {
 }
 
 // Perform real TLS/SSL connection to inspect certificate
-async function checkSSLCertificate(hostname: string): Promise<{
+// connectHost: public IP (SSRF-safe); servername: original hostname for SNI
+async function checkSSLCertificate(
+  hostname: string,
+  connectHost?: string
+): Promise<{
   isSslValid: boolean;
   sslIssuer?: string;
   sslValidFrom?: string;
@@ -270,12 +275,13 @@ async function checkSSLCertificate(hostname: string): Promise<{
   if (!hostname || hostname.length < 3) {
     return { isSslValid: false, error: 'Chybí platná doména' };
   }
+  const host = connectHost || hostname;
 
   return new Promise((resolve) => {
     let resolved = false;
     const socket = tls.connect(
       {
-        host: hostname,
+        host,
         port: 443,
         servername: hostname,
         rejectUnauthorized: false,
@@ -337,7 +343,11 @@ async function checkSSLCertificate(hostname: string): Promise<{
 }
 
 // Perform DNS and RDAP lookup for domain age, registrar, IP
-async function lookupDomainInfo(hostname: string): Promise<{
+// precheckedAddresses: already SSRF-validated public IPs from assertSafePublicHost
+async function lookupDomainInfo(
+  hostname: string,
+  precheckedAddresses?: string[]
+): Promise<{
   ipAddress?: string;
   registrar?: string;
   creationDate?: string;
@@ -358,16 +368,21 @@ async function lookupDomainInfo(hostname: string): Promise<{
 
   if (!hostname) return result;
 
-  try {
-    const addresses = await dns.promises.lookup(hostname);
-    if (addresses && addresses.address) {
-      result.ipAddress = addresses.address;
+  if (precheckedAddresses && precheckedAddresses.length > 0) {
+    result.ipAddress = precheckedAddresses[0];
+  } else {
+    try {
+      const addresses = await dns.promises.lookup(hostname);
+      if (addresses && addresses.address) {
+        result.ipAddress = addresses.address;
+      }
+    } catch (e) {
+      result.warnings.push('Nenalezena IP adresa (doména možná neexistuje)');
     }
-  } catch (e) {
-    result.warnings.push('Nenalezena IP adresa (doména možná neexistuje)');
   }
 
   try {
+    // RDAP is always to public rdap.org — not user-controlled host
     const response = await fetch(`https://rdap.org/domain/${encodeURIComponent(hostname)}`, {
       headers: { Accept: 'application/rdap+json, application/json' },
       signal: AbortSignal.timeout(3500),
@@ -429,15 +444,36 @@ async function lookupDomainInfo(hostname: string): Promise<{
   return result;
 }
 
-// Master SSL & Domain Inspection runner
+// Master SSL & Domain Inspection runner (with SSRF guard — SGW-005 P1-1)
 async function getFullDomainSSLInfo(urlOrHostname: string) {
   const domain = extractDomain(urlOrHostname);
   if (!domain || domain.length < 3) {
     return undefined;
   }
 
-  const sslResult = await checkSSLCertificate(domain);
-  const domainResult = await lookupDomainInfo(domain);
+  const safe = await assertSafePublicHost(domain);
+  if (!safe.ok) {
+    return {
+      domain,
+      isSslValid: false,
+      sslIssuer: '—',
+      sslProtocol: '—',
+      domainAgeText: 'Kontrola domény odmítnuta',
+      registrar: '—',
+      ipAddress: '—',
+      country: '—',
+      trustScore: 10,
+      warnings: [`🛡️ ${safe.reason}`],
+      checkedAt: new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }),
+      error: safe.reason,
+      blockedBySsrfGuard: true,
+    };
+  }
+
+  // Connect to resolved public IP; SNI still uses hostname
+  const connectIp = safe.addresses[0];
+  const sslResult = await checkSSLCertificate(safe.hostname, connectIp);
+  const domainResult = await lookupDomainInfo(safe.hostname, safe.addresses);
 
   let trustScore = 75;
   const warnings = [...domainResult.warnings];
@@ -467,7 +503,7 @@ async function getFullDomainSSLInfo(urlOrHostname: string) {
   trustScore = Math.max(5, Math.min(100, trustScore));
 
   return {
-    domain,
+    domain: safe.hostname,
     isSslValid: sslResult.isSslValid,
     sslIssuer: sslResult.sslIssuer || (sslResult.isSslValid ? 'Let\'s Encrypt / Cloudflare' : 'Neznámý'),
     sslValidFrom: sslResult.sslValidFrom,
@@ -478,7 +514,7 @@ async function getFullDomainSSLInfo(urlOrHostname: string) {
     domainAgeText: domainResult.domainAgeText || (domain.endsWith('.cz') ? 'Tradiční .cz doména' : 'Aktivní doména'),
     registrar: domainResult.registrar || 'CZ.NIC / Registrátor',
     creationDate: domainResult.creationDate,
-    ipAddress: domainResult.ipAddress || 'Zjištěna v DNS',
+    ipAddress: domainResult.ipAddress || connectIp || 'Zjištěna v DNS',
     country: domainResult.country || 'Česká republika / EU',
     trustScore,
     warnings,
