@@ -22,6 +22,8 @@ if (shellNodeEnv) {
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+// ShadowLock: default localhost so LAN cannot hit the API; Cloudflare Tunnel uses 127.0.0.1
+const HOST = process.env.HOST || '127.0.0.1';
 const APP_VERSION = process.env.APP_VERSION || '1.0.0';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const FAMILY_CODE = process.env.FAMILY_CODE || '';
@@ -1434,8 +1436,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`ShadowGuard Shadvert server: http://0.0.0.0:${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`ShadowGuard Shadvert server: http://${HOST}:${PORT}`);
     console.log(`  version=${APP_VERSION}  gemini=${process.env.GEMINI_API_KEY ? 'yes' : 'NO KEY'}  admin=${ADMIN_TOKEN ? 'set' : 'missing'}`);
   });
 }
