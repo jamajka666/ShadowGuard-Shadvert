@@ -18,6 +18,15 @@ import { FamilySettingsCard } from './components/FamilySettingsCard';
 import { AdminPanel } from './components/AdminPanel';
 import { DesignLabFooter } from './components/DesignLabModals';
 import { DesignV2Sandbox } from './design-v2/DesignV2Sandbox';
+import { SimpleResultCard } from './design-v2/SimpleResultCard';
+import { mapSimpleResult } from './design-v2/mapSimpleResult';
+import { calmTokens } from './design-v2/tokens';
+import {
+  classicModeHelpUrl,
+  readUiMode,
+  setUiMode,
+  type UiMode,
+} from './design-v2/simpleModeFlag';
 import { VoiceCommandHandlers } from './utils/voiceCommands';
 import { speakText } from './utils/tts';
 import { useFamilySync } from './hooks/useFamilySync';
@@ -38,6 +47,14 @@ export default function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>('shadowguard');
   const [userRoleMode, setUserRoleMode] = useState<UserRoleMode>('senior');
   const [autoRead, setAutoRead] = useState<boolean>(false);
+
+  // Closed beta: Jednoduchý režim only when flag / /simple / stored opt-in (D-021)
+  const [uiMode, setUiModeState] = useState<UiMode>(() =>
+    typeof window !== 'undefined' ? readUiMode() : 'first-creation'
+  );
+  const isSimpleMode = uiMode === 'simple';
+  /** In simple mode: false = SimpleResultCard; true = full ResultDisplay details */
+  const [showSimpleDetails, setShowSimpleDetails] = useState(false);
 
   // Active view tab
   const [activeTab, setActiveTab] = useState<'analyzer' | 'alerts' | 'guide' | 'quiz' | 'history'>('analyzer');
@@ -99,9 +116,9 @@ export default function App() {
 
       const resData = await response.json();
 
-      // Ensure min 10 seconds scanning animation for authentic analysis experience
+      // First Creation keeps 10s scan; simple closed-beta uses shorter wait (less fatigue)
       const elapsedTime = Date.now() - startTime;
-      const minScanTime = 10000; // 10 seconds
+      const minScanTime = isSimpleMode ? 4000 : 10000;
       if (elapsedTime < minScanTime) {
         await new Promise((resolve) => setTimeout(resolve, minScanTime - elapsedTime));
       }
@@ -113,9 +130,10 @@ export default function App() {
       }
 
       const resultObj: AdCheckResult = resData;
+      setShowSimpleDetails(false);
       setCurrentResult(resultObj);
       setToastLevel(resultObj.safetyLevel);
-      setToastHeadline(resultObj.headline);
+      setToastHeadline(isSimpleMode ? resultObj.headline : resultObj.headline);
 
       // Save to history list
       setHistory((prev) => [resultObj, ...prev.filter((item) => item.id !== resultObj.id)].slice(0, 20));
@@ -130,11 +148,19 @@ export default function App() {
 
   const handleReset = () => {
     setCurrentResult(null);
+    setShowSimpleDetails(false);
+  };
+
+  const exitSimpleMode = () => {
+    setUiMode('first-creation');
+    setUiModeState('first-creation');
+    setShowSimpleDetails(false);
+    window.location.href = classicModeHelpUrl();
   };
 
   const isShadowGuard = themeMode === 'shadowguard';
-  const isCyber = themeMode === 'cyberpunk';
-  const isContrast = themeMode === 'highContrast';
+  const isCyber = !isSimpleMode && themeMode === 'cyberpunk';
+  const isContrast = !isSimpleMode && themeMode === 'highContrast';
 
   const voiceHandlers: VoiceCommandHandlers = {
     onNavigateTab: (tab) => setActiveTab(tab),
@@ -181,7 +207,9 @@ export default function App() {
   return (
     <div
       className={`min-h-screen transition-colors font-sans flex flex-col relative ${
-        isShadowGuard
+        isSimpleMode
+          ? ''
+          : isShadowGuard
           ? 'shadowguard-marble-bg text-slate-100 selection:bg-[#E6B800] selection:text-black'
           : isCyber
           ? 'bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-slate-950 cyber-grid-bg'
@@ -189,45 +217,111 @@ export default function App() {
           ? 'bg-black text-white'
           : 'shadowguard-marble-bg text-slate-100 selection:bg-[#E6B800] selection:text-black'
       }`}
+      style={
+        isSimpleMode
+          ? { background: calmTokens.pageBg, color: calmTokens.text }
+          : undefined
+      }
     >
-      <WelcomeSplash />
+      {!isSimpleMode && <WelcomeSplash />}
       <RiskLevelToast
         safetyLevel={toastLevel}
         headline={toastHeadline}
         onClose={() => setToastLevel(null)}
       />
 
-      {/* Header */}
-      <Header
-        fontSize={fontSize}
-        setFontSize={setFontSize}
-        themeMode={themeMode}
-        setThemeMode={setThemeMode}
-        userRoleMode={userRoleMode}
-        setUserRoleMode={setUserRoleMode}
-        autoRead={autoRead}
-        setAutoRead={setAutoRead}
-        onOpenCriteria={() => setIsCriteriaOpen(true)}
-        onOpenFatherGuide={() => setIsFatherGuideOpen(true)}
-        onOpenSendToSon={() => {
-          setSendToSonCustomText(undefined);
-          setIsSendToSonOpen(true);
-        }}
-        onOpenInstallPwa={() => setIsInstallPwaOpen(true)}
-      />
+      {isSimpleMode && (
+        <div
+          className="w-full border-b px-4 py-2.5 text-center text-sm sm:text-base"
+          style={{
+            background: calmTokens.accentSoft,
+            borderColor: calmTokens.border,
+            color: calmTokens.text,
+          }}
+          role="status"
+        >
+          <span className="font-bold">Closed beta · režim Jednoduchý</span>
+          <span className="mx-2" style={{ color: calmTokens.textMuted }}>
+            ·
+          </span>
+          <button
+            type="button"
+            onClick={exitSimpleMode}
+            className="font-semibold underline underline-offset-2"
+            style={{ color: calmTokens.accent }}
+          >
+            Zpět na klasický vzhled
+          </button>
+        </div>
+      )}
 
-      {/* Voice Commands Bar */}
-      <VoiceCommandBar handlers={voiceHandlers} themeMode={themeMode} />
+      {/* Header — full chrome on First Creation; compact on simple */}
+      {!isSimpleMode ? (
+        <Header
+          fontSize={fontSize}
+          setFontSize={setFontSize}
+          themeMode={themeMode}
+          setThemeMode={setThemeMode}
+          userRoleMode={userRoleMode}
+          setUserRoleMode={setUserRoleMode}
+          autoRead={autoRead}
+          setAutoRead={setAutoRead}
+          onOpenCriteria={() => setIsCriteriaOpen(true)}
+          onOpenFatherGuide={() => setIsFatherGuideOpen(true)}
+          onOpenSendToSon={() => {
+            setSendToSonCustomText(undefined);
+            setIsSendToSonOpen(true);
+          }}
+          onOpenInstallPwa={() => setIsInstallPwaOpen(true)}
+        />
+      ) : (
+        <header
+          className="border-b px-4 py-4"
+          style={{ background: calmTokens.cardBg, borderColor: calmTokens.border }}
+        >
+          <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <ShieldCheck className="w-8 h-8 shrink-0" style={{ color: calmTokens.accent }} aria-hidden />
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-xl font-black truncate" style={{ color: calmTokens.text }}>
+                  ShadowGuard
+                </h1>
+                <p className="text-xs sm:text-sm font-medium" style={{ color: calmTokens.textMuted }}>
+                  Ověření inzerátu — srozumitelně
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsFatherGuideOpen(true)}
+              className="text-sm font-semibold shrink-0 px-3 py-2 rounded-xl border"
+              style={{ borderColor: calmTokens.border, color: calmTokens.accent }}
+            >
+              Nápověda
+            </button>
+          </div>
+        </header>
+      )}
+
+      {/* Voice Commands — First Creation only (simple path stays quiet) */}
+      {!isSimpleMode && <VoiceCommandBar handlers={voiceHandlers} themeMode={themeMode} />}
 
       {/* Main Navigation Tabs */}
       <nav
         className={`border-b transition-colors sticky top-0 z-20 backdrop-blur-md shadow-md ${
-          isCyber
+          isSimpleMode
+            ? ''
+            : isCyber
             ? 'bg-slate-950/90 border-slate-800/80 text-slate-200'
             : isContrast
             ? 'bg-slate-900 border-yellow-400 text-white'
             : 'bg-[#121214]/95 border-[#B8860B]/40 text-slate-100 shadow-[0_4px_20px_rgba(184,134,11,0.15)]'
         }`}
+        style={
+          isSimpleMode
+            ? { background: calmTokens.cardBg, borderColor: calmTokens.border, color: calmTokens.text }
+            : undefined
+        }
       >
         <div className="max-w-6xl mx-auto px-4 flex items-center justify-start sm:justify-center gap-2 overflow-x-auto py-2">
           <button
@@ -238,101 +332,103 @@ export default function App() {
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm sm:text-base whitespace-nowrap transition-all ${
               activeTab === 'analyzer'
-                ? isCyber
+                ? isSimpleMode
+                  ? 'font-black shadow-sm'
+                  : isCyber
                   ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.4)] font-black'
                   : isContrast
                   ? 'bg-yellow-400 text-black shadow-md font-black'
                   : 'bg-gradient-to-r from-[#B8860B] to-[#D4AF37] text-black shadow-[0_0_15px_rgba(184,134,11,0.4)] font-black'
+                : isSimpleMode
+                ? 'opacity-70 hover:opacity-100'
                 : 'text-slate-300 hover:text-white'
             }`}
+            style={
+              isSimpleMode && activeTab === 'analyzer'
+                ? { background: calmTokens.accent, color: '#fff' }
+                : isSimpleMode
+                ? { color: calmTokens.text }
+                : undefined
+            }
           >
             <ShieldCheck className="w-5 h-5" />
             <span>Prověřit inzerát</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('alerts')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm sm:text-base whitespace-nowrap transition-all ${
-              activeTab === 'alerts'
-                ? isCyber
-                  ? 'bg-rose-500 text-slate-950 font-black shadow-[0_0_15px_rgba(244,63,94,0.4)]'
-                  : isContrast
-                  ? 'bg-yellow-400 text-black font-black'
-                  : 'bg-gradient-to-r from-rose-600 to-amber-500 text-white font-black shadow-[0_0_15px_rgba(225,29,72,0.4)]'
-                : 'text-rose-300 hover:text-rose-100 hover:bg-rose-950/40 border border-rose-500/30'
-            }`}
-          >
-            <BellRing className="w-5 h-5 text-rose-400 animate-pulse" />
-            <span>Aktuální varování</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsCriteriaOpen(true)}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-2xl font-bold text-sm sm:text-base whitespace-nowrap transition-all ${
-              isCyber
-                ? 'text-cyan-400 hover:bg-slate-900 border border-cyan-500/30'
-                : 'text-slate-300 hover:text-white hover:bg-[#1A1A1A] border border-[#B8860B]/20'
-            }`}
-          >
-            <Cpu className="w-5 h-5 text-cyan-400" />
-            <span>Princip a kritéria</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsFatherGuideOpen(true)}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-2xl font-bold text-sm sm:text-base whitespace-nowrap transition-all ${
-              isCyber
-                ? 'text-emerald-400 hover:bg-slate-900 border border-emerald-500/30'
-                : 'text-slate-300 hover:text-white hover:bg-[#1A1A1A] border border-[#B8860B]/20'
-            }`}
-          >
-            <Smartphone className="w-5 h-5 text-emerald-400" />
-            <span>Jak dát tátovi do telefonu</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('guide')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm sm:text-base whitespace-nowrap transition-all ${
-              activeTab === 'guide'
-                ? isCyber
-                  ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-black'
-                  : isContrast
-                  ? 'bg-yellow-400 text-black shadow-md'
-                  : 'bg-gradient-to-r from-[#B8860B] to-[#D4AF37] text-black shadow-[0_0_15px_rgba(184,134,11,0.4)] font-black'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            <BookOpen className="w-5 h-5" />
-            <span>Zlatá pravidla</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('quiz')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm sm:text-base whitespace-nowrap transition-all ${
-              activeTab === 'quiz'
-                ? isCyber
-                  ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-black'
-                  : isContrast
-                  ? 'bg-yellow-400 text-black'
-                  : 'bg-gradient-to-r from-[#B8860B] to-[#D4AF37] text-black shadow-[0_0_15px_rgba(184,134,11,0.4)] font-black'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            <HelpCircle className="w-5 h-5" />
-            <span>Trénink podvodů</span>
-          </button>
-
-          {history.length > 0 && (
+          {!isSimpleMode && (
             <button
               type="button"
-              onClick={() => setActiveTab('history')}
+              onClick={() => setActiveTab('alerts')}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm sm:text-base whitespace-nowrap transition-all ${
-                activeTab === 'history'
+                activeTab === 'alerts'
+                  ? isCyber
+                    ? 'bg-rose-500 text-slate-950 font-black shadow-[0_0_15px_rgba(244,63,94,0.4)]'
+                    : isContrast
+                    ? 'bg-yellow-400 text-black font-black'
+                    : 'bg-gradient-to-r from-rose-600 to-amber-500 text-white font-black shadow-[0_0_15px_rgba(225,29,72,0.4)]'
+                  : 'text-rose-300 hover:text-rose-100 hover:bg-rose-950/40 border border-rose-500/30'
+              }`}
+            >
+              <BellRing className="w-5 h-5 text-rose-400 animate-pulse" />
+              <span>Aktuální varování</span>
+            </button>
+          )}
+
+          {!isSimpleMode && (
+            <button
+              type="button"
+              onClick={() => setIsCriteriaOpen(true)}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-2xl font-bold text-sm sm:text-base whitespace-nowrap transition-all ${
+                isCyber
+                  ? 'text-cyan-400 hover:bg-slate-900 border border-cyan-500/30'
+                  : 'text-slate-300 hover:text-white hover:bg-[#1A1A1A] border border-[#B8860B]/20'
+              }`}
+            >
+              <Cpu className="w-5 h-5 text-cyan-400" />
+              <span>Princip a kritéria</span>
+            </button>
+          )}
+
+          {!isSimpleMode && (
+            <button
+              type="button"
+              onClick={() => setIsFatherGuideOpen(true)}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-2xl font-bold text-sm sm:text-base whitespace-nowrap transition-all ${
+                isCyber
+                  ? 'text-emerald-400 hover:bg-slate-900 border border-emerald-500/30'
+                  : 'text-slate-300 hover:text-white hover:bg-[#1A1A1A] border border-[#B8860B]/20'
+              }`}
+            >
+              <Smartphone className="w-5 h-5 text-emerald-400" />
+              <span>Jak dát tátovi do telefonu</span>
+            </button>
+          )}
+
+          {!isSimpleMode && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('guide')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm sm:text-base whitespace-nowrap transition-all ${
+                activeTab === 'guide'
+                  ? isCyber
+                    ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-black'
+                    : isContrast
+                    ? 'bg-yellow-400 text-black shadow-md'
+                    : 'bg-gradient-to-r from-[#B8860B] to-[#D4AF37] text-black shadow-[0_0_15px_rgba(184,134,11,0.4)] font-black'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <BookOpen className="w-5 h-5" />
+              <span>Zlatá pravidla</span>
+            </button>
+          )}
+
+          {!isSimpleMode && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('quiz')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm sm:text-base whitespace-nowrap transition-all ${
+                activeTab === 'quiz'
                   ? isCyber
                     ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-black'
                     : isContrast
@@ -340,6 +436,36 @@ export default function App() {
                     : 'bg-gradient-to-r from-[#B8860B] to-[#D4AF37] text-black shadow-[0_0_15px_rgba(184,134,11,0.4)] font-black'
                   : 'text-slate-300 hover:text-white'
               }`}
+            >
+              <HelpCircle className="w-5 h-5" />
+              <span>Trénink podvodů</span>
+            </button>
+          )}
+
+          {history.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('history')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm sm:text-base whitespace-nowrap transition-all ${
+                activeTab === 'history'
+                  ? isSimpleMode
+                    ? 'font-black shadow-sm'
+                    : isCyber
+                    ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-black'
+                    : isContrast
+                    ? 'bg-yellow-400 text-black'
+                    : 'bg-gradient-to-r from-[#B8860B] to-[#D4AF37] text-black shadow-[0_0_15px_rgba(184,134,11,0.4)] font-black'
+                  : isSimpleMode
+                  ? 'opacity-70 hover:opacity-100'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+              style={
+                isSimpleMode && activeTab === 'history'
+                  ? { background: calmTokens.accent, color: '#fff' }
+                  : isSimpleMode
+                  ? { color: calmTokens.text }
+                  : undefined
+              }
             >
               <History className="w-5 h-5" />
               <span>Historie ({history.length})</span>
@@ -353,19 +479,53 @@ export default function App() {
         {activeTab === 'analyzer' && (
           <div>
             {isLoading ? (
-              <ScanningAnimation fontSize={fontSize} themeMode={themeMode} />
-            ) : currentResult ? (
-              <ResultDisplay
-                result={currentResult}
-                onReset={handleReset}
+              <ScanningAnimation
                 fontSize={fontSize}
-                themeMode={themeMode}
-                autoRead={autoRead}
-                onOpenSendToSon={() => {
-                  setSendToSonCustomText(undefined);
-                  setIsSendToSonOpen(true);
-                }}
+                themeMode={
+                  isSimpleMode
+                    ? 'classic'
+                    : themeMode === 'shadowguard'
+                    ? 'classic'
+                    : themeMode
+                }
               />
+            ) : currentResult ? (
+              isSimpleMode && !showSimpleDetails ? (
+                <div className="space-y-4">
+                  <SimpleResultCard
+                    model={mapSimpleResult(currentResult)}
+                    onShowMore={() => {
+                      setShowSimpleDetails(true);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    onReset={handleReset}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {isSimpleMode && showSimpleDetails && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSimpleDetails(false)}
+                      className="text-sm font-bold underline underline-offset-2"
+                      style={{ color: calmTokens.accent }}
+                    >
+                      ← Zpět na jednoduchý přehled
+                    </button>
+                  )}
+                  <ResultDisplay
+                    result={currentResult}
+                    onReset={handleReset}
+                    fontSize={fontSize}
+                    themeMode={themeMode}
+                    autoRead={autoRead}
+                    onOpenSendToSon={() => {
+                      setSendToSonCustomText(undefined);
+                      setIsSendToSonOpen(true);
+                    }}
+                  />
+                </div>
+              )
             ) : (
               <div>
                 <AdAnalyzerForm
@@ -380,7 +540,7 @@ export default function App() {
                   }}
                 />
 
-                <FamilySettingsCard />
+                {!isSimpleMode && <FamilySettingsCard />}
 
                 {/* Show recent checks below form */}
                 {history.length > 0 && (
@@ -388,6 +548,7 @@ export default function App() {
                     history={history}
                     onSelectResult={(item) => {
                       setCurrentResult(item);
+                      setShowSimpleDetails(false);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
                     onClearHistory={() => setHistory([])}
@@ -414,6 +575,7 @@ export default function App() {
             history={history}
             onSelectResult={(item) => {
               setCurrentResult(item);
+              setShowSimpleDetails(false);
               setActiveTab('analyzer');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
@@ -455,24 +617,37 @@ export default function App() {
       {/* Footer */}
       <footer
         className={`py-6 border-t text-center text-xs sm:text-sm ${
-          isCyber
+          isSimpleMode
+            ? ''
+            : isCyber
             ? 'bg-slate-950 border-slate-900 text-slate-500'
             : isContrast
             ? 'bg-black border-yellow-400 text-slate-400'
             : 'bg-white border-slate-200 text-slate-500'
         }`}
+        style={
+          isSimpleMode
+            ? { background: calmTokens.cardBg, borderColor: calmTokens.border, color: calmTokens.textMuted }
+            : undefined
+        }
       >
         <div className="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="flex items-center gap-1 font-medium">
-            <span>ShadowGuard Shadvert — First Creation · s péčí pro otce a rodinu</span>
+            <span>
+              {isSimpleMode
+                ? 'ShadowGuard · režim Jednoduchý (closed beta)'
+                : 'ShadowGuard Shadvert — First Creation · s péčí pro otce a rodinu'}
+            </span>
             <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
           </p>
-          <p className="text-slate-500">
-            AI Google Gemini · <a href="/admin" className="text-cyan-600 hover:underline">Admin</a>
-          </p>
+          {!isSimpleMode && (
+            <p className="text-slate-500">
+              AI Google Gemini · <a href="/admin" className="text-cyan-600 hover:underline">Admin</a>
+            </p>
+          )}
         </div>
-        {/* Lab: swatches + survey — does not change dad's main path */}
-        <DesignLabFooter themeMode={themeMode} />
+        {/* Lab only on First Creation — simple closed beta stays calm */}
+        {!isSimpleMode && <DesignLabFooter themeMode={themeMode} />}
       </footer>
     </div>
   );

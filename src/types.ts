@@ -82,6 +82,11 @@ export interface AdCheckResult {
   groundingSources?: { title: string; url: string }[];
   category?: string;
   isFallback?: boolean;
+  /** Hybrid rules version — same input + same rulesVersion should yield stable safetyLevel for rule path */
+  rulesVersion?: string;
+  /** How the verdict was produced */
+  verdictSource?: 'phishing_kill' | 'hybrid_rules' | 'ai' | 'cache';
+  cached?: boolean;
 }
 
 export interface ScamAlertItem {

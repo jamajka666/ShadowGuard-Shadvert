@@ -25,10 +25,55 @@ const PORT = Number(process.env.PORT) || 3000;
 // ShadowLock: default localhost so LAN cannot hit the API; Cloudflare Tunnel uses 127.0.0.1
 const HOST = process.env.HOST || '127.0.0.1';
 const APP_VERSION = process.env.APP_VERSION || '1.0.0';
+/** Bump when hybrid rules / kill-switch / fallback thresholds change (Trust Engine). */
+const RULES_VERSION = process.env.RULES_VERSION || 'rules-2026-08-06';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const FAMILY_CODE = process.env.FAMILY_CODE || '';
 const DATA_DIR = path.join(process.cwd(), 'data');
 const FAMILY_DB_PATH = path.join(DATA_DIR, 'family.json');
+const VERDICT_CACHE_TTL_MS = Number(process.env.VERDICT_CACHE_TTL_MS) || 10 * 60 * 1000;
+const MAX_URL_CHARS = Number(process.env.MAX_URL_CHARS) || 2000;
+const MAX_USER_NOTE_CHARS = Number(process.env.MAX_USER_NOTE_CHARS) || 2000;
+
+type VerdictCacheEntry = { payload: unknown; expiresAt: number };
+const verdictCache = new Map<string, VerdictCacheEntry>();
+
+function verdictCacheKey(url: string, rawText: string, userNote: string, hasImage: boolean): string {
+  const raw = `${RULES_VERSION}|${url.trim().toLowerCase()}|${rawText.trim()}|${userNote.trim()}|img:${hasImage ? 1 : 0}`;
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+function getCachedVerdict(key: string): unknown | null {
+  const hit = verdictCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    verdictCache.delete(key);
+    return null;
+  }
+  return hit.payload;
+}
+
+function setCachedVerdict(key: string, payload: unknown) {
+  // simple bound: drop oldest if too large
+  if (verdictCache.size > 200) {
+    const first = verdictCache.keys().next().value;
+    if (first) verdictCache.delete(first);
+  }
+  verdictCache.set(key, { payload, expiresAt: Date.now() + VERDICT_CACHE_TTL_MS });
+}
+
+function withTrustMeta(
+  result: Record<string, unknown>,
+  source: 'phishing_kill' | 'hybrid_rules' | 'ai' | 'cache',
+  cached = false
+) {
+  return {
+    ...result,
+    rulesVersion: RULES_VERSION,
+    verdictSource: source,
+    cached,
+  };
+}
 
 // Security baseline (SGW-005): hide stack fingerprint, set safe headers
 app.disable('x-powered-by');
@@ -203,6 +248,10 @@ app.post('/api/family/heartbeat', (req, res) => {
 
 app.post('/api/family/history', (req, res) => {
   const { familyCode, deviceId, deviceLabel, item } = req.body || {};
+  // D-P2-3: align with heartbeat — missing config vs invalid code
+  if (!FAMILY_CODE) {
+    return res.status(503).json({ error: 'Rodinný sync není na serveru nakonfigurován' });
+  }
   if (!familyCodeOk(familyCode)) {
     return res.status(403).json({ error: 'Neplatný rodinný kód' });
   }
@@ -681,7 +730,7 @@ const createFallbackResult = (
     },
   ];
 
-  return {
+  return withTrustMeta({
     id: 'res-' + Date.now(),
     timestamp: Date.now(),
     inputUrl: urlInput,
@@ -695,9 +744,9 @@ const createFallbackResult = (
     riskFactors,
     positiveFactors,
     sellerChecks,
+    isFallback: true,
     urlAnalysis: {
-      domainName: domainName || 'Analýza textu / snímku',
-      isOfficialDomain: safetyLevel === 'DUVERYHODNE',
+      domainName: domainName || 'Analýza textu / snímku',      isOfficialDomain: safetyLevel === 'DUVERYHODNE',
       domainWarning:
         safetyLevel === 'PODVOD'
           ? 'Tato doména vypadá jako neoficiální napodobenina známé služby.'
@@ -725,8 +774,7 @@ const createFallbackResult = (
     },
     sslDomainInfo,
     trustedAlternatives,
-    isFallback: true,
-  };
+  }, 'hybrid_rules');
 };
 
 // API Endpoint for Analyzing Advertisements
@@ -737,6 +785,17 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
     if (!url && !rawText && !imageBase64) {
       return res.status(400).json({
         error: 'Chybí zadání. Vložte prosím odkaz na inzerát, text nebo snímek obrazovky.',
+      });
+    }
+
+    if (typeof url === 'string' && url.length > MAX_URL_CHARS) {
+      return res.status(413).json({
+        error: 'Odkaz je příliš dlouhý. Vložte prosím kratší URL.',
+      });
+    }
+    if (typeof userNote === 'string' && userNote.length > MAX_USER_NOTE_CHARS) {
+      return res.status(413).json({
+        error: 'Poznámka je příliš dlouhá. Zkraťte text a zkuste znovu.',
       });
     }
 
@@ -752,6 +811,19 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
       return res.status(413).json({
         error: 'Text je příliš dlouhý. Vložte prosím kratší úryvek inzerátu.',
       });
+    }
+
+    const hasImage = Boolean(imageBase64 && typeof imageBase64 === 'string' && imageBase64.length > 50);
+    const cacheKey = verdictCacheKey(String(url || ''), String(rawText || ''), String(userNote || ''), hasImage);
+    const cached = getCachedVerdict(cacheKey);
+    if (cached && typeof cached === 'object') {
+      return res.json(
+        withTrustMeta(
+          { ...(cached as Record<string, unknown>), id: 'res-' + Date.now(), timestamp: Date.now() },
+          'cache',
+          true
+        )
+      );
     }
 
     // Fetch SSL and Domain WHOIS info if URL provided
@@ -770,70 +842,81 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
       if (phishingCheck.isPhishing && phishingCheck.isKilledBeforeGemini) {
         console.log(`[URL Validator] Blocked dangerous phishing URL directly before Gemini API call: ${url} (${phishingCheck.matchedPattern})`);
 
-        return res.json({
-          id: 'res-phish-' + Date.now(),
-          timestamp: Date.now(),
-          inputUrl: url,
-          inputSnippet: rawText,
-          safetyLevel: 'PODVOD',
-          trustScore: 0,
-          headline: `🛑 ODHALEN PHISHINGOVÝ ODKAZ! (${phishingCheck.matchedPattern || 'Podvodná doména'})`,
-          summaryForSenior: `VAROVÁNÍ PRO OTCE: Odkaz "${phishingCheck.domainName || url}" byl okamžitě vyhodnocen jako nebezpečný phishingový podvod ještě před odesláním dotazu. ${phishingCheck.reason}`,
-          actionRecommendation: 'NEKUPOVAT_NEPLATIT',
-          actionAdvice: [
-            'Na tento odkaz v žádném případě neklikatejte a nevyplňujte žádné formuláře.',
-            'Nikdy nezadávejte číslo své bankovní karty ani přihlašovací údaje do bankovnictví.',
-            'Pokud vám odkaz poslal kupující či prodávající, okamžitě s ním ukončete komunikaci.',
-          ],
-          riskFactors: [
-            {
-              id: 'rf-phish-1',
-              severity: 'VYSOKE',
-              title: `Phishingová doména: ${phishingCheck.matchedPattern || 'Nebezpečný odkaz'}`,
-              description: phishingCheck.reason || 'Doména neodpovídá oficiální české službě a slouží k vylákání peněz nebo údajů z karty.',
+        const phishResult = withTrustMeta(
+          {
+            id: 'res-phish-' + Date.now(),
+            timestamp: Date.now(),
+            inputUrl: url,
+            inputSnippet: rawText,
+            safetyLevel: 'PODVOD',
+            trustScore: 0,
+            headline: `🛑 ODHALEN PHISHINGOVÝ ODKAZ! (${phishingCheck.matchedPattern || 'Podvodná doména'})`,
+            summaryForSenior: `VAROVÁNÍ PRO OTCE: Odkaz "${phishingCheck.domainName || url}" byl okamžitě vyhodnocen jako nebezpečný phishingový podvod ještě před odesláním dotazu. ${phishingCheck.reason}`,
+            actionRecommendation: 'NEKUPOVAT_NEPLATIT',
+            actionAdvice: [
+              'Na tento odkaz v žádném případě neklikatejte a nevyplňujte žádné formuláře.',
+              'Nikdy nezadávejte číslo své bankovní karty ani přihlašovací údaje do bankovnictví.',
+              'Pokud vám odkaz poslal kupující či prodávající, okamžitě s ním ukončete komunikaci.',
+            ],
+            riskFactors: [
+              {
+                id: 'rf-phish-1',
+                severity: 'VYSOKE',
+                title: `Phishingová doména: ${phishingCheck.matchedPattern || 'Nebezpečný odkaz'}`,
+                description:
+                  phishingCheck.reason ||
+                  'Doména neodpovídá oficiální české službě a slouží k vylákání peněz nebo údajů z karty.',
+              },
+              {
+                id: 'rf-phish-2',
+                severity: 'VYSOKE',
+                title: 'Vysoké riziko ztráty peněz na bankovním účtu',
+                description:
+                  'Podvodné stránky tohoto typu jsou vytvořeny s cílem získat přímý přístup k vaší platební kartě.',
+              },
+            ],
+            positiveFactors: [],
+            sellerChecks: [
+              'Kupující/prodávající poslal nebezpečný odkaz mimo oficiální aplikaci',
+              'Vyžaduje vyplnění údajů o platební kartě',
+            ],
+            urlAnalysis: {
+              domainName: phishingCheck.domainName || url,
+              isOfficialDomain: false,
+              domainWarning: `⚠️ DETEKOVÁN PHISHING: ${phishingCheck.reason}`,
             },
-            {
-              id: 'rf-phish-2',
-              severity: 'VYSOKE',
-              title: 'Vysoké riziko ztráty peněz na bankovním účtu',
-              description: 'Podvodné stránky tohoto typu jsou vytvořeny s cílem získat přímý přístup k vaší platební kartě.',
+            priceEvaluation: {
+              isPriceSuspicious: true,
+              priceComment: 'Podvodné odkazy jsou často doprovázeny nereálně výhodnými cenami.',
             },
-          ],
-          positiveFactors: [],
-          sellerChecks: [
-            'Kupující/prodávající poslal nebezpečný odkaz mimo oficiální aplikaci',
-            'Vyžaduje vyplnění údajů o platební kartě',
-          ],
-          urlAnalysis: {
-            domainName: phishingCheck.domainName || url,
-            isOfficialDomain: false,
-            domainWarning: `⚠️ DETEKOVÁN PHISHING: ${phishingCheck.reason}`,
+            trustedAlternatives: [
+              {
+                name: 'Heureka.cz (Srovnání cen a overené e-shopy)',
+                url: 'https://www.heureka.cz',
+                description:
+                  'Porovnejte ceny stejného zboží u ověřených českých obchodníků se zárukou a garancí nákupu.',
+                badge: 'Srovnávač cen & Garance',
+              },
+              {
+                name: 'Alza.cz / Datart.cz (Oficiální e-shopy)',
+                url: 'https://www.alza.cz',
+                description:
+                  'Bezpečný nákup nového i zánovního/rozbaleného zboží se 2 roky zárukou a možností vyzvednutí na pobočce.',
+                badge: 'Oficiální prodejce + Záruka',
+              },
+              {
+                name: 'Bazoš.cz / Sbazar.cz (S filtrem na osobní předání)',
+                url: 'https://www.bazos.cz',
+                description:
+                  'Při nákupu z druhé ruky vyhledávejte inzeráty ve svém okrese a trvejte na osobním převzetí s vyzkoušením.',
+                badge: 'Pouze osobní předání',
+              },
+            ],
           },
-          priceEvaluation: {
-            isPriceSuspicious: true,
-            priceComment: 'Podvodné odkazy jsou často doprovázeny nereálně výhodnými cenami.',
-          },
-          trustedAlternatives: [
-            {
-              name: 'Heureka.cz (Srovnání cen a overené e-shopy)',
-              url: 'https://www.heureka.cz',
-              description: 'Porovnejte ceny stejného zboží u ověřených českých obchodníků se zárukou a garancí nákupu.',
-              badge: 'Srovnávač cen & Garance',
-            },
-            {
-              name: 'Alza.cz / Datart.cz (Oficiální e-shopy)',
-              url: 'https://www.alza.cz',
-              description: 'Bezpečný nákup nového i zánovního/rozbaleného zboží se 2 roky zárukou a možností vyzvednutí na pobočce.',
-              badge: 'Oficiální prodejce + Záruka',
-            },
-            {
-              name: 'Bazoš.cz / Sbazar.cz (S filtrem na osobní předání)',
-              url: 'https://www.bazos.cz',
-              description: 'Při nákupu z druhé ruky vyhledávejte inzeráty ve svém okrese a trvejte na osobním převzetí s vyzkoušením.',
-              badge: 'Pouze osobní předání',
-            },
-          ],
-        });
+          'phishing_kill'
+        );
+        setCachedVerdict(cacheKey, phishResult);
+        return res.json(phishResult);
       }
     }
 
@@ -841,7 +924,9 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
 
     if (!ai) {
       console.log('Gemini client unavailable, using smart safety check rules.');
-      return res.json(createFallbackResult(url, rawText));
+      const fallback = createFallbackResult(url, rawText, userNote, imageBase64, sslDomainInfo);
+      setCachedVerdict(cacheKey, fallback);
+      return res.json(fallback);
     }
 
     const systemInstruction = `Jsi špičkový bezpečnostní analytik specializovaný na odhalování internetových podvodů, phishingových e-shopů, falešných inzerátů (Bazoš, Sbazar, Vinted, Facebook Marketplace), falešných investičních nabídek a SMS/WhatsApp podvodů v České republice.
@@ -1038,16 +1123,19 @@ Zkontroluj zejména:
             }
           }
 
-          const finalResult = {
-            id: 'res-' + Date.now(),
-            timestamp: Date.now(),
-            inputUrl: url,
-            inputSnippet: rawText,
-            ...parsedData,
-            sslDomainInfo: sslDomainInfo || parsedData.sslDomainInfo,
-            groundingSources: groundingSources.length > 0 ? groundingSources : undefined,
-          };
-
+          const finalResult = withTrustMeta(
+            {
+              id: 'res-' + Date.now(),
+              timestamp: Date.now(),
+              inputUrl: url,
+              inputSnippet: rawText,
+              ...parsedData,
+              sslDomainInfo: sslDomainInfo || parsedData.sslDomainInfo,
+              groundingSources: groundingSources.length > 0 ? groundingSources : undefined,
+            },
+            'ai'
+          );
+          setCachedVerdict(cacheKey, finalResult);
           return res.json(finalResult);
         }
       } catch (geminiErr: any) {
@@ -1056,7 +1144,9 @@ Zkontroluj zejména:
     }
 
     // Return smart fallback rule result if Gemini is unavailable, rate-limited, or fails
-    return res.json(createFallbackResult(url, rawText, userNote, imageBase64, sslDomainInfo));
+    const fallbackResult = createFallbackResult(url, rawText, userNote, imageBase64, sslDomainInfo);
+    setCachedVerdict(cacheKey, fallbackResult);
+    return res.json(fallbackResult);
   } catch (error) {
     console.error('API /api/analyze-ad error:', error);
     const { url = '', rawText = '', userNote = '', imageBase64 = '' } = req.body || {};
