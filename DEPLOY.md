@@ -177,13 +177,20 @@ loginctl enable-linger $USER   # běží i po odhlášení (PC musí být zapnut
 
 ## 9. Aktualizace kódu
 
+Produkce běží na **Lenovo** (`~/projekty/moje-app`, user `jamajka`). Z Asus:
+
 ```bash
+ssh lenovo-wifi   # HostName 192.168.8.101 (LAN 192.168.10.100 někdy nedostupné)
 cd ~/projekty/moje-app
-git pull
 export PATH="$HOME/.nvm/versions/node/v20.20.2/bin:$PATH"
+git pull origin main
 npm install
+npm test
 npm run build
 systemctl --user restart shadvert.service
+systemctl --user status shadvert.service --no-pager
+# Smoke (z Asus nebo Lenovo):
+# BASE_URL=https://shadowguard-shadvert.site npm run smoke
 # Volitelně v /admin: Force update
 ```
 
