@@ -42,11 +42,67 @@ export default function App() {
   if (typeof window !== 'undefined' && window.location.pathname.startsWith('/design-v2')) {
     return <DesignV2Sandbox />;
   }
-  // Accessibility & Theme state
-  const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>('large');
+  // Accessibility & Theme state (font + role persisted — Lenovo WIP / First Creation polish)
+  const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>(() => {
+    let size: 'normal' | 'large' | 'xlarge' = 'large';
+    try {
+      const saved = localStorage.getItem('strazce_inzeratu_font_size');
+      if (saved === 'normal' || saved === 'large' || saved === 'xlarge') size = saved;
+    } catch {
+      /* ignore */
+    }
+    if (typeof document !== 'undefined') {
+      const narrow = window.matchMedia('(max-width: 640px)').matches;
+      const applied = narrow && size === 'xlarge' ? 'large' : size;
+      document.documentElement.setAttribute('data-font-size', applied);
+    }
+    return size;
+  });
   const [themeMode, setThemeMode] = useState<ThemeMode>('shadowguard');
-  const [userRoleMode, setUserRoleMode] = useState<UserRoleMode>('senior');
+  const [userRoleMode, setUserRoleMode] = useState<UserRoleMode>(() => {
+    try {
+      const saved = localStorage.getItem('strazce_user_role_mode');
+      if (saved === 'senior' || saved === 'expert') return saved;
+    } catch {
+      /* ignore */
+    }
+    return 'senior';
+  });
   const [autoRead, setAutoRead] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('strazce_user_role_mode', userRoleMode);
+    } catch {
+      /* ignore */
+    }
+  }, [userRoleMode]);
+
+  // Phone: cap A++ → A+ so layout does not break; remember A++ for desktop
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 640px)').matches;
+  });
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const onChange = () => setIsNarrowViewport(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  const uiFontSize: 'normal' | 'large' | 'xlarge' =
+    isNarrowViewport && fontSize === 'xlarge' ? 'large' : fontSize;
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-font-size', uiFontSize);
+    try {
+      localStorage.setItem('strazce_inzeratu_font_size', fontSize);
+    } catch {
+      /* ignore */
+    }
+  }, [fontSize, uiFontSize]);
 
   // Closed beta: Jednoduchý režim only when flag / /simple / stored opt-in (D-021)
   const [uiMode, setUiModeState] = useState<UiMode>(() =>
@@ -258,7 +314,7 @@ export default function App() {
       {/* Header — full chrome on First Creation; compact on simple */}
       {!isSimpleMode ? (
         <Header
-          fontSize={fontSize}
+          fontSize={uiFontSize}
           setFontSize={setFontSize}
           themeMode={themeMode}
           setThemeMode={setThemeMode}
@@ -480,7 +536,7 @@ export default function App() {
           <div>
             {isLoading ? (
               <ScanningAnimation
-                fontSize={fontSize}
+                fontSize={uiFontSize}
                 themeMode={
                   isSimpleMode
                     ? 'classic'
@@ -516,7 +572,7 @@ export default function App() {
                   <ResultDisplay
                     result={currentResult}
                     onReset={handleReset}
-                    fontSize={fontSize}
+                    fontSize={uiFontSize}
                     themeMode={themeMode}
                     autoRead={autoRead}
                     onOpenSendToSon={() => {
@@ -531,9 +587,10 @@ export default function App() {
                 <AdAnalyzerForm
                   onAnalyze={handleAnalyze}
                   isLoading={isLoading}
-                  fontSize={fontSize}
+                  fontSize={uiFontSize}
                   themeMode={themeMode}
                   history={history}
+                  userRoleMode={userRoleMode}
                   onOpenSendToSon={(customText) => {
                     setSendToSonCustomText(customText);
                     setIsSendToSonOpen(true);
@@ -542,8 +599,8 @@ export default function App() {
 
                 {!isSimpleMode && <FamilySettingsCard />}
 
-                {/* Show recent checks below form */}
-                {history.length > 0 && (
+                {/* Expert only on home: historie/analýzy na konci (Senior: méně šumu) */}
+                {!isSimpleMode && userRoleMode === 'expert' && history.length > 0 && (
                   <HistoryList
                     history={history}
                     onSelectResult={(item) => {
@@ -552,7 +609,7 @@ export default function App() {
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
                     onClearHistory={() => setHistory([])}
-                    fontSize={fontSize}
+                    fontSize={uiFontSize}
                     highContrast={isContrast}
                     themeMode={themeMode}
                   />
@@ -563,12 +620,12 @@ export default function App() {
         )}
 
         {activeTab === 'alerts' && (
-          <ScamAlertsSection themeMode={themeMode} fontSize={fontSize} />
+          <ScamAlertsSection themeMode={themeMode} fontSize={uiFontSize} />
         )}
 
-        {activeTab === 'guide' && <SeniorGuide fontSize={fontSize} highContrast={isContrast} />}
+        {activeTab === 'guide' && <SeniorGuide fontSize={uiFontSize} highContrast={isContrast} />}
 
-        {activeTab === 'quiz' && <ScamQuiz fontSize={fontSize} highContrast={isContrast} />}
+        {activeTab === 'quiz' && <ScamQuiz fontSize={uiFontSize} highContrast={isContrast} />}
 
         {activeTab === 'history' && (
           <HistoryList
@@ -580,7 +637,7 @@ export default function App() {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             onClearHistory={() => setHistory([])}
-            fontSize={fontSize}
+            fontSize={uiFontSize}
             highContrast={isContrast}
             themeMode={themeMode}
           />
@@ -616,7 +673,7 @@ export default function App() {
 
       {/* Footer */}
       <footer
-        className={`py-6 border-t text-center text-xs sm:text-sm ${
+        className={`py-6 border-t text-center text-xs sm:text-sm safe-area-pad-bottom ${
           isSimpleMode
             ? ''
             : isCyber

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Clipboard, Link, FileText, Image, ShieldCheck, Sparkles, AlertCircle, X, Send, Mic, MicOff, ShieldAlert, CheckCircle2, Camera, RefreshCw } from 'lucide-react';
 import { SAMPLE_SCENARIOS } from '../data/sampleScenarios';
-import { PredefinedScenario, SSLDomainInfo, ThemeMode, AdCheckResult } from '../types';
+import { PredefinedScenario, SSLDomainInfo, ThemeMode, AdCheckResult, UserRoleMode } from '../types';
 import { checkPhishingUrl } from '../utils/phishingValidator';
 import { SslDomainCard } from './SslDomainCard';
 import { PermissionCheck } from './PermissionCheck';
@@ -13,14 +13,17 @@ import { checkMicDiagnostics } from '../utils/micPermissions';
 import {
   createSpeechRecognizer,
   dedupeSpeechText,
+  isSpeechSupported,
   SpeechRecognizerHandle,
 } from '../utils/speechRecognition';
+import { isIOS } from '../utils/platform';
 
 interface AdAnalyzerFormProps {
   onAnalyze: (data: { url: string; rawText: string; imageBase64?: string; userNote: string }) => void;
   isLoading: boolean;
   fontSize: 'normal' | 'large' | 'xlarge';
   themeMode: ThemeMode;
+  userRoleMode?: UserRoleMode;
   onOpenSendToSon: (customText?: string) => void;
   history?: AdCheckResult[];
 }
@@ -30,6 +33,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
   isLoading,
   fontSize,
   themeMode,
+  userRoleMode = 'senior',
   onOpenSendToSon,
   history = [],
 }) => {
@@ -139,7 +143,11 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           await videoRef.current.play().catch(() => {});
         }
       } catch (fallbackErr) {
-        setCameraError('Nepodařilo se spustit fotoaparát. Zkontrolujte prosím povolená oprávnění kamery ve vašem prohlížeči.');
+        setCameraError(
+          isIOS()
+            ? 'Nepodařilo se spustit fotoaparát. Na iPhonu: Nastavení → Safari → Fotoaparát → Povolit, a otevřete app přes HTTPS v Safari.'
+            : 'Nepodařilo se spustit fotoaparát. Zkontrolujte prosím povolená oprávnění kamery ve vašem prohlížeči.'
+        );
       }
     }
   };
@@ -204,6 +212,15 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
       return;
     }
 
+    if (!isSpeechSupported()) {
+      setErrorMsg(
+        isIOS()
+          ? 'Diktát hlasem je na iPhonu omezený. Napište text, vložte odkaz nebo vyfoťte inzerát — kontrola funguje stejně.'
+          : 'Váš prohlížeč nepodporuje rozpoznávání řeči. Použijte Google Chrome nebo Microsoft Edge, nebo text napište / vložte.'
+      );
+      return;
+    }
+
     stopSpeech();
     stopDictation();
 
@@ -257,23 +274,31 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
     await handle.start();
   };
 
-  // Handle clipboard paste button
+  // Handle clipboard paste button (Safari/iOS often blocks readText — offer manual paste)
   const handlePasteClipboard = async () => {
     try {
-      if (navigator.clipboard && navigator.clipboard.readText) {
+      if (navigator.clipboard?.readText) {
         const text = await navigator.clipboard.readText();
-        if (text) {
-          if (text.startsWith('http://') || text.startsWith('https://')) {
-            setUrl(text.trim());
+        if (text?.trim()) {
+          const t = text.trim();
+          if (/^https?:\/\//i.test(t)) {
+            setUrl(t);
           } else {
-            setRawText(text.trim());
+            setRawText(t);
           }
           setErrorMsg('');
+          return;
         }
       }
     } catch (err) {
       console.warn('Clipboard read error:', err);
     }
+    // iOS / restricted browsers: guide user to system paste
+    setErrorMsg(
+      isIOS()
+        ? 'Safari na iPhonu často nepovolí přímé čtení schránky. Klepněte do pole textu nebo odkazu, podržte prst a zvolte Vložit.'
+        : 'Nepodařilo se načíst schránku. Vložte text ručně (Ctrl/Cmd+V) do pole odkazu nebo textu inzerátu.'
+    );
   };
 
   // Handle image upload
@@ -337,17 +362,17 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
   const isCyber = themeMode === 'cyberpunk';
   const isContrast = themeMode === 'highContrast';
 
+  const isExpert = userRoleMode === 'expert';
+
   return (
     <div className="space-y-6">
-      {/* Intro Hero Welcome Banner with 3D Shield Badge */}
+      {/* 1) Úvodní info s názvem — oba režimy */}
       <ShadowGuardHeroBanner
         themeMode={themeMode}
         onOpenMicGuide={() => setShowPermissionCheck(true)}
       />
 
-      {/* User Safety Score Weekly Widget */}
-      <UserSafetyScoreWidget history={history} themeMode={themeMode} />
-
+      {/* 2) Kontrola inzerátu — hned po úvodu (Senior i Expert) */}
       <div
         className={`rounded-3xl p-6 sm:p-8 shadow-2xl border transition-all ${
           isShadowGuard
@@ -956,8 +981,11 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
       </div>
     </div>
 
-    {/* Aktuální varování před podvody v ČR (Google Search Grounding) */}
+    {/* 3) Aktuální varování — po formuláři (oba režimy) */}
     <ScamAlertsSection themeMode={themeMode} fontSize={fontSize} />
+
+    {/* 4) Expert: týdenní skóre až na konci bloku (Senior: skryté — méně šumu) */}
+    {isExpert && <UserSafetyScoreWidget history={history} themeMode={themeMode} />}
     </div>
   );
 };

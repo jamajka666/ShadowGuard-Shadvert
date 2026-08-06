@@ -105,13 +105,14 @@ export function mapSpeechError(error: string): { code: SpeechErrorCode; message:
     case 'audio-capture':
       return {
         code: 'audio-capture',
-        message: 'Systém nenašel aktivní mikrofon. Zkontrolujte oprávnění Androidu a zda mikrofon není používán jinou aplikací.',
+        message:
+          'Systém nenašel aktivní mikrofon. Zkontrolujte oprávnění v nastavení prohlížeče / telefonu a zda mikrofon nepoužívá jiná aplikace.',
       };
     case 'network':
       return {
         code: 'network',
         message:
-          'Připojení k rozpoznávači řeči Google selhalo (Chrome posílá hlas do cloudu). Zkontrolujte internet a zkuste znovu. Offline režim hlas nepodporuje.',
+          'Připojení k rozpoznávači řeči selhalo (prohlížeč často posílá hlas do cloudu). Zkontrolujte internet. Na iPhonu je diktát často nespolehlivý — raději pište nebo fotografujte.',
       };
     case 'no-speech':
       return {
@@ -323,7 +324,10 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}): S
 
   const startInternal = async (isRestart = false) => {
     if (!Ctor) {
-      options.onError?.('not-supported', 'Váš prohlížeč nepodporuje Web Speech API. Použijte Google Chrome nebo Microsoft Edge.');
+      options.onError?.(
+        'not-supported',
+        'Tento prohlížeč nepodporuje hlasové diktování. Na iPhonu pište, vkládejte odkaz nebo fotografie; na Androidu / PC zkuste Chrome nebo Edge.'
+      );
       return;
     }
     if (!isSecureMicContext()) {

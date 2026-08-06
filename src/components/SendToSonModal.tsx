@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Send, Phone, MessageSquare, Check, Share2, X, Copy, ShieldCheck, Heart, AlertCircle } from 'lucide-react';
 import { AdCheckResult, ThemeMode } from '../types';
 import { cleanUrlForSharing } from '../utils/urlUtils';
+import { isIOS } from '../utils/platform';
+import { copyTextToClipboard } from '../utils/shareFile';
 
 interface SendToSonModalProps {
   isOpen: boolean;
@@ -88,8 +90,7 @@ export const SendToSonModal: React.FC<SendToSonModalProps> = ({
     setSmsNotice('');
 
     // Detect iOS for SMS URL scheme difference
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    const delimiter = isIOS ? '&' : '?';
+    const delimiter = isIOS() ? '&' : '?';
 
     const smsUrl = formattedPhone
       ? `sms:+${formattedPhone}${delimiter}body=${encodeURIComponent(defaultMsg)}`
@@ -110,14 +111,10 @@ export const SendToSonModal: React.FC<SendToSonModalProps> = ({
   };
 
   const handleCopy = async () => {
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(defaultMsg);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 3000);
-      }
-    } catch (e) {
-      console.warn('Copy error:', e);
+    const ok = await copyTextToClipboard(defaultMsg);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
     }
   };
 

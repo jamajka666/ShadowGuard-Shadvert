@@ -84,7 +84,17 @@ export const AlternativeSuggestions: React.FC<AlternativeSuggestionsProps> = ({ 
             <h3 className="text-xl sm:text-2xl font-black tracking-tight flex items-center gap-2">
               <span>Bezpečné a ověřené alternativy nákupu</span>
             </h3>
-            <p className={`text-xs sm:text-sm font-medium ${isCyber ? 'text-cyan-300' : 'text-slate-600'}`}>
+            <p
+              className={`text-xs sm:text-sm font-medium ${
+                isShadowGuard || isCyber
+                  ? isCyber
+                    ? 'text-cyan-300'
+                    : 'text-slate-300'
+                  : isContrast
+                  ? 'text-yellow-100'
+                  : 'text-slate-700'
+              }`}
+            >
               {isScam
                 ? '⚠️ Tento inzerát vykazuje známky podvodu. Nereagujte na něj a zvolte prověřený obchod:'
                 : isCaution
@@ -110,7 +120,7 @@ export const AlternativeSuggestions: React.FC<AlternativeSuggestionsProps> = ({ 
                 ? 'bg-slate-900/90 border-cyan-500/30 hover:border-cyan-400 hover:shadow-[0_0_20px_rgba(6,182,212,0.4)]'
                 : isContrast
                 ? 'bg-slate-900 border-yellow-400 text-white'
-                : 'bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-emerald-300'
+                : 'bg-white border-slate-300 shadow-sm hover:shadow-md hover:border-emerald-400 text-slate-950'
             }`}
           >
             <div>
@@ -119,24 +129,50 @@ export const AlternativeSuggestions: React.FC<AlternativeSuggestionsProps> = ({ 
                   className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md ${
                     isCyber
                       ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
-                      : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : isContrast
+                      ? 'bg-yellow-400 text-black border border-yellow-300'
+                      : 'bg-emerald-100 text-emerald-900 border border-emerald-400'
                   }`}
                 >
                   {alt.badge || 'Prověřený obchod'}
                 </span>
                 {alt.estimatedPrice && (
-                  <span className={`text-xs font-bold font-mono ${isCyber ? 'text-cyan-400 neon-text-cyan' : 'text-emerald-400'}`}>
+                  <span
+                    className={`text-xs font-bold font-mono ${
+                      isCyber
+                        ? 'text-cyan-400 neon-text-cyan'
+                        : isContrast
+                        ? 'text-yellow-300'
+                        : 'text-emerald-800'
+                    }`}
+                  >
                     {alt.estimatedPrice}
                   </span>
                 )}
               </div>
 
-              <h4 className="text-base font-black text-slate-900 dark:text-white mb-2 flex items-center gap-1.5">
-                <Building2 className={`w-4 h-4 shrink-0 ${isCyber ? 'text-cyan-400' : 'text-emerald-500'}`} />
+              <h4
+                className={`text-base font-black mb-2 flex items-center gap-1.5 ${
+                  isCyber || isContrast ? 'text-white' : 'text-slate-950'
+                }`}
+              >
+                <Building2
+                  className={`w-4 h-4 shrink-0 ${
+                    isCyber ? 'text-cyan-400' : isContrast ? 'text-yellow-400' : 'text-emerald-700'
+                  }`}
+                />
                 <span>{alt.name}</span>
               </h4>
 
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
+              <p
+                className={`text-xs leading-relaxed mb-4 ${
+                  isCyber
+                    ? 'text-slate-300'
+                    : isContrast
+                    ? 'text-slate-200'
+                    : 'text-slate-800'
+                }`}
+              >
                 {alt.description}
               </p>
             </div>
@@ -167,16 +203,32 @@ export const AlternativeSuggestions: React.FC<AlternativeSuggestionsProps> = ({ 
             ? 'bg-slate-900/80 border-slate-800 text-slate-300'
             : isContrast
             ? 'bg-slate-900 border-yellow-400/50 text-slate-200'
-            : 'bg-white/80 border-emerald-200 text-slate-700'
+            : 'bg-white border-emerald-400 text-slate-800 shadow-sm'
         }`}
       >
         <div className="flex items-start gap-2.5">
-          <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+          <CheckCircle2
+            className={`w-5 h-5 shrink-0 mt-0.5 ${
+              isCyber ? 'text-emerald-400' : isContrast ? 'text-yellow-400' : 'text-emerald-700'
+            }`}
+          />
           <div>
-            <span className="font-bold block text-slate-900 dark:text-white">
+            <span
+              className={`font-bold block ${
+                isCyber || isContrast ? 'text-white' : 'text-slate-950'
+              }`}
+            >
               Zlaté pravidlo bezpečného nákupu z druhé ruky:
             </span>
-            <span className="text-slate-600 dark:text-slate-300">
+            <span
+              className={
+                isCyber
+                  ? 'text-slate-300'
+                  : isContrast
+                  ? 'text-slate-200'
+                  : 'text-slate-800'
+              }
+            >
               Trvejte na osobním převzetí v místě bydliště a vyzkoušení zboží před zaplacením. Nikdy neplatíte předem přes neznámé odkazy.
             </span>
           </div>
@@ -186,7 +238,13 @@ export const AlternativeSuggestions: React.FC<AlternativeSuggestionsProps> = ({ 
           href="https://www.coi.cz/pro-spotrebitele/rizikove-e-shopy/"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 underline underline-offset-2 shrink-0 flex items-center gap-1 self-end sm:self-auto"
+          className={`text-xs font-bold underline underline-offset-2 shrink-0 flex items-center gap-1 self-end sm:self-auto ${
+            isCyber
+              ? 'text-emerald-400 hover:text-emerald-300'
+              : isContrast
+              ? 'text-yellow-300 hover:text-yellow-200'
+              : 'text-emerald-800 hover:text-emerald-950'
+          }`}
         >
           <span>Seznam rizikových e-shopů ČOI</span>
           <ArrowRight className="w-3.5 h-3.5" />

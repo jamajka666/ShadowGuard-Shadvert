@@ -207,17 +207,24 @@ export const PermissionCheck: React.FC<PermissionCheckProps> = ({
         {activeTab === 'safari' && (
           <>
             <h4 className="font-bold text-[#00F5FF] flex items-center gap-1.5">
-              <span>Apple Safari na Macu / iPadu:</span>
+              <span>Apple Safari (Mac / iPhone / iPad):</span>
             </h4>
+            <div className="mb-3 p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-100 text-xs sm:text-sm leading-relaxed">
+              <strong>Důležité pro iPhone:</strong> i když mikrofon povolíte, <em>rozpoznávání řeči (diktát a hlasové
+              příkazy)</em> na iOS Safari často nefunguje. Pro kontrolu inzerátu stačí <strong>text, odkaz nebo
+              fotka</strong> — jádro aplikace funguje stejně.
+            </div>
             <ol className="list-decimal list-inside space-y-2 text-slate-300 leading-relaxed">
               <li>
-                V horní liště klikněte na nabídku <strong>Safari</strong> -&gt; <strong>Nastavení pro tento web...</strong>
+                Na Macu: nabídka <strong>Safari</strong> -&gt; <strong>Nastavení pro tento web...</strong> -&gt; Mikrofon
+                → Povolit.
               </li>
               <li>
-                U možnosti <strong>Mikrofon</strong> zvolte hodnotu <strong>Povolit</strong> (Allow).
+                Na iPhonu: <strong>Nastavení iOS</strong> -&gt; <strong>Safari</strong> -&gt; <strong>Mikrofon</strong>{' '}
+                → Povolit (pro případné TTS / pokus o hlas).
               </li>
               <li>
-                V iPhone otevřete <strong>Nastavení iOS</strong> -&gt; <strong>Safari</strong> -&gt; <strong>Mikrofon</strong> -&gt; zvolte <strong>Povolit</strong>.
+                Pro fotoaparát: Nastavení -&gt; Safari -&gt; Fotoaparát → Povolit.
               </li>
             </ol>
           </>
@@ -249,13 +256,15 @@ export const PermissionCheck: React.FC<PermissionCheckProps> = ({
             </h4>
             <ol className="list-decimal list-inside space-y-2 text-slate-300 leading-relaxed">
               <li>
-                V mobilním prohlížeči ťukněte na ikonu zámku 🔒 vedle adresy webu.
+                <strong>Android (Chrome):</strong> zámek 🔒 u adresy → Oprávnění → Mikrofon → Povolit. Hlasové příkazy
+                fungují nejlíp zde.
               </li>
               <li>
-                Otevřete <strong>Oprávnění</strong> -&gt; <strong>Mikrofon</strong> -&gt; <strong>Povolit</strong>.
+                <strong>iPhone (Safari):</strong> Nastavení → Safari → Mikrofon / Fotoaparát. Diktát je omezený — pište
+                nebo fotografie. Přidejte app na plochu: Sdílet → Přidat na plochu.
               </li>
               <li>
-                Pokud vyskočí hláška systému Android, otevřete <em>Nastavení telefonu -&gt; Aplikace -&gt; Chrome -&gt; Oprávnění -&gt; Mikrofon -&gt; Povolit</em>.
+                Web musí běžet na <strong>HTTPS</strong> (např. shadowguard-shadvert.site).
               </li>
             </ol>
           </>

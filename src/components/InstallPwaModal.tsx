@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Smartphone, X, CheckCircle2, Share, PlusSquare, ShieldCheck } from 'lucide-react';
+import { isIOS as detectIOS, isStandalonePwa } from '../utils/platform';
 
 interface InstallPwaModalProps {
   isOpen: boolean;
@@ -10,18 +11,14 @@ interface InstallPwaModalProps {
 export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({ isOpen, onClose, uiMode }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
+  const [isIOSDevice, setIsIOSDevice] = useState(false);
 
   useEffect(() => {
-    // Check if running in standalone PWA mode
-    if (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone) {
+    if (isStandalonePwa()) {
       setIsInstalled(true);
     }
 
-    // Detect iOS
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const iosDevice = /iphone|ipad|ipod/.test(userAgent);
-    setIsIOS(iosDevice);
+    setIsIOSDevice(detectIOS());
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -125,7 +122,7 @@ export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({ isOpen, onClos
             )}
 
             {/* Manual Instructions for iOS Safari */}
-            {isIOS ? (
+            {isIOSDevice ? (
               <div className={`p-4 rounded-2xl border ${isCyber ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                 <span className="font-black text-sm block mb-2 text-slate-900 dark:text-white flex items-center gap-2">
                   <AppleIcon className="w-4 h-4 text-emerald-400" />
@@ -136,10 +133,13 @@ export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({ isOpen, onClos
                     1. Klepněte v Safari na tlačítko <strong>Sdílet</strong> <Share className="w-4 h-4 text-blue-400 inline" /> na spodní liště.
                   </li>
                   <li className="flex items-center gap-2">
-                    2. Vyberte možnost <strong>Pridat na plochu</strong> <PlusSquare className="w-4 h-4 text-slate-400 inline" />.
+                    2. Vyberte možnost <strong>Přidat na plochu</strong> <PlusSquare className="w-4 h-4 text-slate-400 inline" />.
                   </li>
                   <li>3. Potvrďte stisknutím tlačítka <strong>Přidat</strong> vpravo nahoře.</li>
                 </ol>
+                <p className="mt-3 text-xs text-amber-700 dark:text-amber-300/90 leading-relaxed">
+                  Hlasové diktování na iPhonu je omezené — pro kontrolu pište, vložte odkaz nebo fotografie.
+                </p>
               </div>
             ) : !deferredPrompt ? (
               /* Manual Instructions for Android / Chrome */

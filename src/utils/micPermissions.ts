@@ -50,7 +50,8 @@ export async function checkMicDiagnostics(): Promise<MicDiagnostics> {
   if (!isSecureContext) {
     errorMessage = 'Prohlížeč vyžaduje zabezpečené spojení (HTTPS) pro použití mikrofonu.';
   } else if (!hasSpeechRecognitionSupport) {
-    errorMessage = 'Váš prohlížeč nepodporuje rozpoznávání reči (Web Speech API). Doporučujeme Google Chrome nebo MS Edge.';
+    errorMessage =
+      'Prohlížeč nepodporuje rozpoznávání řeči (Web Speech API). Na iPhonu stačí psát / fotit; na Androidu a PC doporučujeme Chrome nebo Edge.';
   } else if (permissionState === 'denied') {
     errorMessage = 'Přístup k mikrofonu je v prohlížeči nebo v systému zablokován.';
   }
@@ -127,7 +128,7 @@ export async function requestMicrophoneAccess(): Promise<{
       return {
         success: false,
         errorType: 'not-found',
-        message: 'V systému nebyl nalezen žádný mikrofon. Připojte mikrofon na Android/Linux.',
+        message: 'V systému nebyl nalezen žádný mikrofon. Zkontrolujte nastavení zařízení.',
       };
     } else {
       return {

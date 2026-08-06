@@ -72,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header
-      className={`border-b shadow-xl transition-all ${
+      className={`border-b shadow-xl transition-all safe-area-pad-top ${
         isShadowGuard
           ? 'bg-[#121214] text-slate-100 border-[#CD7F32]/40 shadow-[0_4px_30px_rgba(212,160,23,0.15)]'
           : isCyber
@@ -185,12 +185,18 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="text-xs sm:text-sm font-black text-slate-100 flex items-center gap-1.5">
                   {userRoleMode === 'senior' ? 'Režim seniora' : 'Režim experta'}
                 </span>
+                <span className="text-[10px] text-slate-500 font-medium leading-tight max-w-[11rem]">
+                  {userRoleMode === 'senior'
+                    ? 'Jednoduchý start: kontrola hned nahoře'
+                    : 'Víc detailů, skóre, historie a audit'}
+                </span>
 
-                {/* Role Switch Toggle */}
+                {/* Role Switch Toggle — testery / rodina můžou porovnat oba pohledy */}
                 <div className="flex items-center gap-1 mt-1 bg-slate-950/80 p-0.5 rounded-lg border border-slate-800">
                   <button
                     type="button"
                     onClick={() => setUserRoleMode('senior')}
+                    title="Přehledné rozhraní pro tátu a starší generaci"
                     className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
                       userRoleMode === 'senior'
                         ? isShadowGuard
@@ -204,6 +210,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <button
                     type="button"
                     onClick={() => setUserRoleMode('expert')}
+                    title="Technické detaily, týdenní skóre, historie a audit výsledku"
                     className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
                       userRoleMode === 'expert'
                         ? isShadowGuard
@@ -367,12 +374,14 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 A+
               </button>
+              {/* A++ jen na širších obrazovkách — na telefonu max A+ (layout) */}
               <button
                 type="button"
                 onClick={() => setFontSize('xlarge')}
-                className={`px-2 py-0.5 rounded font-black ${
+                className={`hidden sm:inline-block px-2 py-0.5 rounded font-black ${
                   fontSize === 'xlarge' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400'
                 }`}
+                title="Největší písmo (jen na počítači / tabletu na šířku)"
               >
                 A++
               </button>

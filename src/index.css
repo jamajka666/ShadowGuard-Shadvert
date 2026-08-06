@@ -1,5 +1,31 @@
 @import "tailwindcss";
 
+/* Globální velikost písma (A / A+ / A++) — Tailwind text-* používá rem,
+   takže změna root font-size škáluje celou aplikaci včetně mezer. */
+html {
+  font-size: 100%; /* fallback = normal */
+  transition: font-size 0.2s ease;
+}
+
+html[data-font-size="normal"] {
+  font-size: 100%; /* ~16px  — A  */
+}
+
+html[data-font-size="large"] {
+  font-size: 118.75%; /* ~19px — A+  (výchozí, +19 %) */
+}
+
+html[data-font-size="xlarge"] {
+  font-size: 137.5%; /* ~22px — A++ (+38 % vs A, jen desktop) */
+}
+
+/* Telefon / úzký displej: A++ se nepoužívá — max A+, ať se nerozhází layout */
+@media (max-width: 640px) {
+  html[data-font-size="xlarge"] {
+    font-size: 118.75%; /* stejné jako A+ */
+  }
+}
+
 @keyframes cyber-pulse {
   0%, 100% {
     box-shadow: 0 0 15px rgba(6, 182, 212, 0.3), 0 0 30px rgba(6, 182, 212, 0.15);
@@ -128,5 +154,45 @@
 .shadowguard-text-cyan {
   color: #00F5FF;
   text-shadow: 0 0 10px rgba(0, 245, 255, 0.6);
+}
+
+/* iOS Safari / standalone PWA — notch, status bar, home indicator */
+html {
+  /* Fill the visual viewport on iOS (avoids 100vh address-bar jump) */
+  min-height: 100%;
+  min-height: 100dvh;
+}
+
+body {
+  min-height: 100%;
+  min-height: 100dvh;
+  /* Keep content clear of home indicator when not using per-component padding */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Utility classes for fixed / sticky chrome */
+.safe-area-pad-x {
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+}
+
+.safe-area-pad-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-area-pad-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-area-inset {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+/* Fullscreen modals: prefer dynamic viewport height on mobile Safari */
+.modal-max-h {
+  max-height: min(90vh, 90dvh);
 }
 

@@ -1,7 +1,8 @@
 import { AdCheckResult } from '../types';
+import { shareOrDownloadFile } from './shareFile';
 
-export function exportHistoryToCsv(history: AdCheckResult[]) {
-  if (!history || history.length === 0) return;
+export async function exportHistoryToCsv(history: AdCheckResult[]): Promise<'shared' | 'downloaded' | 'opened' | 'failed' | 'empty'> {
+  if (!history || history.length === 0) return 'empty';
 
   // Header row
   const headers = [
@@ -51,15 +52,12 @@ export function exportHistoryToCsv(history: AdCheckResult[]) {
 
   // UTF-8 BOM for Excel / mobile viewers compatibility with Czech accents
   const csvContent = '\uFEFF' + [headers.map(escapeCsv).join(';'), ...rows].join('\n');
-
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
   const fileName = `strazce_inzeratu_historie_${new Date().toISOString().slice(0, 10)}.csv`;
-  link.setAttribute('download', fileName);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+
+  return shareOrDownloadFile(blob, fileName, {
+    mimeType: 'text/csv;charset=utf-8',
+    title: 'Historie kontrol ShadowGuard',
+    text: 'Export historie prověřených inzerátů',
+  });
 }

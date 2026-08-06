@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Smartphone, Download, HardDrive, Share2, Check, ExternalLink, X, Globe, Shield, QrCode } from 'lucide-react';
 import { ThemeMode } from '../types';
+import { isIOS } from '../utils/platform';
+import { copyTextToClipboard } from '../utils/shareFile';
 
 interface FatherPhoneGuideModalProps {
   isOpen: boolean;
@@ -14,21 +16,19 @@ export const FatherPhoneGuideModal: React.FC<FatherPhoneGuideModalProps> = ({
   themeMode,
 }) => {
   const [copiedAppUrl, setCopiedAppUrl] = useState(false);
-  const [activeDeviceTab, setActiveDeviceTab] = useState<'android' | 'iphone'>('android');
+  const [activeDeviceTab, setActiveDeviceTab] = useState<'android' | 'iphone'>(() =>
+    isIOS() ? 'iphone' : 'android'
+  );
 
   if (!isOpen) return null;
 
   const currentUrl = window.location.href;
 
   const handleCopyLink = async () => {
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(currentUrl);
-        setCopiedAppUrl(true);
-        setTimeout(() => setCopiedAppUrl(false), 3000);
-      }
-    } catch (e) {
-      console.warn('Copy error:', e);
+    const ok = await copyTextToClipboard(currentUrl);
+    if (ok) {
+      setCopiedAppUrl(true);
+      setTimeout(() => setCopiedAppUrl(false), 3000);
     }
   };
 
@@ -37,9 +37,9 @@ export const FatherPhoneGuideModal: React.FC<FatherPhoneGuideModalProps> = ({
   const isContrast = themeMode === 'highContrast';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto safe-area-inset">
       <div
-        className={`relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl p-6 sm:p-8 shadow-2xl border transition-all ${
+        className={`relative w-full max-w-3xl modal-max-h overflow-y-auto rounded-3xl p-6 sm:p-8 shadow-2xl border transition-all ${
           isShadowGuard
             ? 'bg-[#121214] border-[#CD7F32]/80 text-white shadow-[0_0_40px_rgba(212,160,23,0.3)] shadowguard-bronze-border'
             : isCyber
@@ -218,6 +218,20 @@ export const FatherPhoneGuideModal: React.FC<FatherPhoneGuideModalProps> = ({
                   <strong>Klepněte na „Přidat na plochu“ (Add to Home Screen):</strong>
                   <p className="text-xs text-slate-400 mt-0.5">
                     Aplikace bude vypadat i reagovat jako klasická aplikace stažená z App Store.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-500/40 flex items-start gap-3">
+                <span className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-300 font-black flex items-center justify-center shrink-0">
+                  !
+                </span>
+                <div>
+                  <strong className="text-amber-200">Hlas na iPhonu je omezený</strong>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Diktát a hlasové příkazy v Safari často nefungují. Táta může klidně{' '}
+                    <strong>psát text, vkládat odkaz nebo fotit</strong> inzerát — kontrola a historie fungují stejně.
+                    Plný hlas je spolehlivější na Androidu (Chrome).
                   </p>
                 </div>
               </div>

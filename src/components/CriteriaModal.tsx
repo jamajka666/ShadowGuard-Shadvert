@@ -30,9 +30,9 @@ export const CriteriaModal: React.FC<CriteriaModalProps> = ({ isOpen, onClose, t
   const isContrast = themeMode === 'highContrast';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto safe-area-inset">
       <div
-        className={`relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl p-6 sm:p-8 shadow-2xl border transition-all ${
+        className={`relative w-full max-w-4xl modal-max-h overflow-y-auto rounded-3xl p-6 sm:p-8 shadow-2xl border transition-all ${
           isShadowGuard
             ? 'bg-[#121214] border-[#CD7F32]/80 text-white shadow-[0_0_40px_rgba(212,160,23,0.3)] shadowguard-bronze-border'
             : isCyber

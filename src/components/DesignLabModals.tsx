@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Palette, ClipboardList, X, Download, Check } from 'lucide-react';
+import { Palette, ClipboardList, X, Download, Check, Copy, Share2 } from 'lucide-react';
+import { shareOrDownloadFile, copyTextToClipboard } from '../utils/shareFile';
 
 /** First Creation lab: color swatchbook + short feedback questionnaire (non-breaking for dad's main path). */
 
@@ -366,6 +367,7 @@ function SurveyModal({ onClose }: { onClose: () => void }) {
     }
   });
   const [saved, setSaved] = useState(false);
+  const [exportHint, setExportHint] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -378,38 +380,69 @@ function SurveyModal({ onClose }: { onClose: () => void }) {
   const setA = (id: string, v: string) => {
     setAnswers((prev) => ({ ...prev, [id]: v }));
     setSaved(false);
+    setExportHint(null);
   };
 
-  const download = () => {
-    const payload = {
-      versionLabel: 'First Creation',
-      savedAt: new Date().toISOString(),
-      swatchVote: (() => {
-        try {
-          return localStorage.getItem('shadvert_swatch_vote');
-        } catch {
-          return null;
-        }
-      })(),
-      answers,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `shadvert-first-creation-feedback-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const buildPayload = () => ({
+    versionLabel: 'First Creation',
+    savedAt: new Date().toISOString(),
+    swatchVote: (() => {
+      try {
+        return localStorage.getItem('shadvert_swatch_vote');
+      } catch {
+        return null;
+      }
+    })(),
+    answers,
+  });
+
+  const download = async () => {
+    const payload = buildPayload();
+    const json = JSON.stringify(payload, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const fileName = `shadvert-first-creation-feedback-${Date.now()}.json`;
+    const result = await shareOrDownloadFile(blob, fileName, {
+      mimeType: 'application/json',
+      title: 'ShadowGuard feedback',
+      text: 'Odpovědi z dotazníku First Creation',
+    });
     setSaved(true);
+    if (result === 'shared') {
+      setExportHint('Sdíleno — např. do Souborů, Mailu nebo AirDrop.');
+    } else if (result === 'opened') {
+      setExportHint('Soubor otevřen — na iPhonu použijte Sdílet → Uložit do Souborů.');
+    } else if (result === 'downloaded') {
+      setExportHint('JSON stažen do zařízení.');
+    } else {
+      setExportHint('Export se nepodařil — zkuste „Zkopírovat odpovědi“.');
+    }
+  };
+
+  const copyAnswers = async () => {
+    const json = JSON.stringify(buildPayload(), null, 2);
+    const ok = await copyTextToClipboard(json);
+    setSaved(true);
+    setExportHint(
+      ok
+        ? 'Odpovědi zkopírovány do schránky — vložte je do e-mailu / zprávy zakladateli.'
+        : 'Kopírování selhalo. Zkuste Sdílet / stáhnout JSON.'
+    );
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-3 bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Dotazník">
-      <div className="w-full max-w-lg max-h-[88vh] overflow-y-auto rounded-2xl bg-slate-950 border border-slate-700 shadow-2xl">
+    <div
+      className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-3 bg-black/70 backdrop-blur-sm safe-area-inset"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Dotazník"
+    >
+      <div className="w-full max-w-lg modal-max-h overflow-y-auto rounded-2xl bg-slate-950 border border-slate-700 shadow-2xl">
         <div className="sticky top-0 flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-800 bg-slate-950/95">
           <div>
             <h2 className="text-base font-bold text-white">Krátký dotazník</h2>
-            <p className="text-xs text-slate-400">5–10 otázek · ukládá se jen v tomto prohlížeči · můžete stáhnout JSON</p>
+            <p className="text-xs text-slate-400">
+              5–10 otázek · jen v tomto prohlížeči · sdílejte / zkopírujte JSON (i z iPhonu)
+            </p>
           </div>
           <button type="button" onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:bg-slate-800" aria-label="Zavřít">
             <X className="w-5 h-5" />
@@ -456,16 +489,32 @@ function SurveyModal({ onClose }: { onClose: () => void }) {
             </div>
           ))}
 
-          <button
-            type="button"
-            onClick={download}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white"
-          >
-            <Download className="w-4 h-4" />
-            {saved ? 'Uloženo — stáhnout znovu' : 'Uložit a stáhnout odpovědi (JSON)'}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={() => void download()}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white"
+            >
+              <Share2 className="w-4 h-4" />
+              <Download className="w-4 h-4" />
+              {saved ? 'Sdílet / stáhnout znovu' : 'Sdílet nebo stáhnout (JSON)'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void copyAnswers()}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600"
+            >
+              <Copy className="w-4 h-4" />
+              Zkopírovat odpovědi
+            </button>
+          </div>
+          {exportHint && (
+            <p className="text-xs text-emerald-300/90 text-center bg-emerald-950/40 border border-emerald-800/50 rounded-xl px-3 py-2">
+              {exportHint}
+            </p>
+          )}
           <p className="text-[11px] text-slate-500 text-center">
-            First Creation lab · data neposíláme na server · pro zakladatele / testery
+            First Creation lab · data neposíláme na server · pro zakladatele / testery · iPhone: Sdílet → Soubory / Mail
           </p>
         </div>
       </div>

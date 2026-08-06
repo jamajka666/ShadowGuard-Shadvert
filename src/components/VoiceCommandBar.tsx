@@ -29,6 +29,7 @@ import {
   SpeechRecognizerHandle,
 } from '../utils/speechRecognition';
 import { playMicStartBeep, playMicStopBeep } from '../utils/audioBeep';
+import { isIOS } from '../utils/platform';
 
 interface VoiceCommandBarProps {
   handlers: VoiceCommandHandlers;
@@ -44,6 +45,7 @@ export const VoiceCommandBar: React.FC<VoiceCommandBarProps> = ({ handlers, them
   const [diagnostics, setDiagnostics] = useState<MicDiagnostics | null>(null);
   const [isTestingMic, setIsTestingMic] = useState(false);
   const [micStatusMsg, setMicStatusMsg] = useState<string | null>(null);
+  const onIOS = isIOS();
 
   const recognizerRef = useRef<SpeechRecognizerHandle | null>(null);
   const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -161,7 +163,11 @@ export const VoiceCommandBar: React.FC<VoiceCommandBarProps> = ({ handlers, them
       return;
     }
     if (!isSpeechSupported() || !currentDiag.hasSpeechRecognitionSupport) {
-      setMicStatusMsg('Prohlížeč nepodporuje Web Speech API. Použijte Google Chrome nebo Microsoft Edge.');
+      setMicStatusMsg(
+        onIOS
+          ? 'Hlasové příkazy jsou na iPhonu omezené. Použijte tlačítka menu, pište text nebo fotografie — kontrola funguje stejně.'
+          : 'Prohlížeč nepodporuje Web Speech API. Použijte Google Chrome nebo Microsoft Edge.'
+      );
       setShowDiagnostics(true);
       setIsListening(false);
       return;
@@ -218,7 +224,13 @@ export const VoiceCommandBar: React.FC<VoiceCommandBarProps> = ({ handlers, them
         }`}
       >
         <div className="max-w-6xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-2 min-w-0 flex-1">
+            {onIOS && !isListening && (
+              <p className="text-[11px] sm:text-xs font-medium text-amber-200/90 bg-amber-950/50 border border-amber-500/30 rounded-xl px-2.5 py-1.5 leading-snug">
+                Na iPhonu je hlas omezený. Pro kontrolu pište, vložte odkaz nebo fotografie — menu funguje tlačítky.
+              </p>
+            )}
+            <div className="flex items-center gap-3 flex-wrap">
             <button
               onClick={toggleListening}
               type="button"
@@ -244,7 +256,7 @@ export const VoiceCommandBar: React.FC<VoiceCommandBarProps> = ({ handlers, them
               ) : (
                 <>
                   <Mic className="w-4 h-4 text-[#00F5FF]" />
-                  <span>Zapnout hlasové příkazy 🎤</span>
+                  <span>{onIOS ? 'Zkusit hlas (omezeno) 🎤' : 'Zapnout hlasové příkazy 🎤'}</span>
                 </>
               )}
             </button>
@@ -263,9 +275,12 @@ export const VoiceCommandBar: React.FC<VoiceCommandBarProps> = ({ handlers, them
               </span>
             ) : (
               <span className="hidden md:inline-block opacity-80 font-medium">
-                Aplikaci můžete kompletně ovládat hlasem v češtině (Chrome + HTTPS).
+                {onIOS
+                  ? 'Hlas na iOS Safari je nespolehlivý — preferujte text a fotky.'
+                  : 'Aplikaci můžete kompletně ovládat hlasem v češtině (Chrome + HTTPS).'}
               </span>
             )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -310,7 +325,7 @@ export const VoiceCommandBar: React.FC<VoiceCommandBarProps> = ({ handlers, them
 
       {showDiagnostics && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-3xl p-6 sm:p-8 bg-[#121214] border-2 border-[#B8860B]/80 text-white shadow-[0_0_50px_rgba(184,134,11,0.3)] relative max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-lg rounded-3xl p-6 sm:p-8 bg-[#121214] border-2 border-[#B8860B]/80 text-white shadow-[0_0_50px_rgba(184,134,11,0.3)] relative modal-max-h overflow-y-auto safe-area-inset">
             <button
               onClick={() => setShowDiagnostics(false)}
               className="absolute right-4 top-4 text-slate-400 hover:text-white p-2 rounded-xl transition-colors"
@@ -324,9 +339,21 @@ export const VoiceCommandBar: React.FC<VoiceCommandBarProps> = ({ handlers, them
               </div>
               <div>
                 <h2 className="text-xl font-black text-white">Diagnostika mikrofonu</h2>
-                <p className="text-xs text-slate-400">Android / Linux / Chrome — HTTPS je povinné</p>
+                <p className="text-xs text-slate-400">
+                  {onIOS
+                    ? 'iPhone: diktát je omezený — pro kontrolu stačí text, odkaz nebo fotka'
+                    : 'Android / Linux / Chrome — HTTPS je povinné'}
+                </p>
               </div>
             </div>
+
+            {onIOS && (
+              <div className="mb-4 p-3 rounded-2xl bg-amber-950/50 border border-amber-500/40 text-amber-100 text-xs sm:text-sm leading-relaxed">
+                <strong className="text-amber-300">iPhone / iPad:</strong> Rozpoznávání řeči v Safari často nefunguje
+                spolehlivě. Aplikaci dál použijete — pište, vložte odkaz nebo vyfoťte inzerát. Hlasové příkazy jsou
+                primárně pro Android Chrome.
+              </div>
+            )}
 
             <div className="space-y-3 mb-6">
               <div className="p-3 rounded-2xl bg-[#1C1C1E] border border-slate-800 flex items-center justify-between text-xs sm:text-sm">

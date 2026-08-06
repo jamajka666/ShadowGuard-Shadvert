@@ -248,7 +248,9 @@ export const HistoryList: React.FC<HistoryListProps> = ({
 
           <button
             type="button"
-            onClick={() => exportHistoryToCsv(history)}
+            onClick={() => {
+              void exportHistoryToCsv(history);
+            }}
             className={`text-xs font-bold flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shadow-sm ${
               isCyber
                 ? 'bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 cyber-button-glow'
@@ -256,7 +258,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                 ? 'bg-yellow-400 text-black font-black border border-yellow-500'
                 : 'bg-[#B8860B] hover:bg-[#D4AF37] text-black font-black border border-[#D4AF37]'
             }`}
-            title="Stáhnout kompletní historii v tabulkovém formátu CSV"
+            title="Exportovat historii (CSV) — na iPhonu přes Sdílet / Soubory"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>Export CSV</span>
