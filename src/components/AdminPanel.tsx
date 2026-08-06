@@ -1,5 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, Shield, Smartphone, History, LogOut, Zap, Wifi, WifiOff } from 'lucide-react';
+import {
+  RefreshCw,
+  Shield,
+  Smartphone,
+  History,
+  LogOut,
+  Zap,
+  Wifi,
+  WifiOff,
+  Clock,
+  FolderOpen,
+} from 'lucide-react';
 
 interface DeviceRow {
   deviceId: string;
@@ -7,6 +18,11 @@ interface DeviceRow {
   appVersion?: string;
   lastSeen: number;
   online: boolean;
+  recent?: boolean;
+  status?: 'online' | 'recent' | 'offline';
+  platform?: string;
+  isBot?: boolean;
+  ageMs?: number;
   userAgent?: string;
 }
 
@@ -21,14 +37,37 @@ interface HistoryRow {
   receivedAt: number;
 }
 
+interface ExportRow {
+  fileName: string;
+  bytes: number;
+  mtime: number;
+  deviceLabel?: string;
+  deviceId?: string;
+}
+
+function formatAge(ms?: number): string {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return '?';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `${h} h`;
+  return `${Math.floor(h / 24)} d`;
+}
+
 export const AdminPanel: React.FC = () => {
   const [token, setToken] = useState(() => sessionStorage.getItem('sg_admin_token') || '');
   const [inputToken, setInputToken] = useState('');
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [exportsList, setExportsList] = useState<ExportRow[]>([]);
+  const [onlineCount, setOnlineCount] = useState(0);
+  const [onlineWindowMs, setOnlineWindowMs] = useState(5 * 60 * 1000);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hideBots, setHideBots] = useState(true);
 
   const authHeaders = useCallback(
     () => ({
@@ -43,9 +82,11 @@ export const AdminPanel: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const [dRes, hRes] = await Promise.all([
-        fetch('/api/family/devices', { headers: authHeaders() }),
+      const q = hideBots ? '?hideBots=1' : '?hideBots=0';
+      const [dRes, hRes, eRes] = await Promise.all([
+        fetch(`/api/family/devices${q}`, { headers: authHeaders() }),
         fetch('/api/family/history', { headers: authHeaders() }),
+        fetch('/api/family/exports', { headers: authHeaders() }),
       ]);
       if (!dRes.ok || !hRes.ok) {
         setError('Neplatný token nebo chyba serveru');
@@ -55,19 +96,25 @@ export const AdminPanel: React.FC = () => {
       const dData = await dRes.json();
       const hData = await hRes.json();
       setDevices(dData.devices || []);
+      setOnlineCount(Number(dData.onlineCount || 0));
+      setOnlineWindowMs(Number(dData.onlineWindowMs || 300000));
       setHistory(hData.history || []);
+      if (eRes.ok) {
+        const eData = await eRes.json();
+        setExportsList(eData.exports || []);
+      }
     } catch {
       setError('Nelze se připojit k serveru');
     } finally {
       setLoading(false);
     }
-  }, [token, authHeaders]);
+  }, [token, authHeaders, hideBots]);
 
   useEffect(() => {
     if (token) void load();
     const t = setInterval(() => {
       if (token) void load();
-    }, 20000);
+    }, 15000);
     return () => clearInterval(t);
   }, [token, load]);
 
@@ -83,6 +130,7 @@ export const AdminPanel: React.FC = () => {
     setToken('');
     setDevices([]);
     setHistory([]);
+    setExportsList([]);
   };
 
   const forceReload = async () => {
@@ -99,7 +147,9 @@ export const AdminPanel: React.FC = () => {
         return;
       }
       const data = await res.json();
-      setMsg(`✅ Force reload nastaven (${new Date(data.forceReloadAt).toLocaleString('cs-CZ')}). Klienti se obnoví do ~45 s.`);
+      setMsg(
+        `✅ Force reload nastaven (${new Date(data.forceReloadAt).toLocaleString('cs-CZ')}). Klienti se obnoví do ~45 s.`
+      );
     } catch {
       setError('Síťová chyba');
     }
@@ -140,6 +190,9 @@ export const AdminPanel: React.FC = () => {
     );
   }
 
+  const onlineDevices = devices.filter((d) => d.online);
+  const recentDevices = devices.filter((d) => d.recent);
+
   return (
     <div className="min-h-screen bg-[#0A0A0C] text-slate-100">
       <header className="border-b border-[#CD7F32]/30 bg-[#121214] px-4 py-4">
@@ -147,6 +200,9 @@ export const AdminPanel: React.FC = () => {
           <div className="flex items-center gap-2">
             <Shield className="w-6 h-6 text-[#D4A017]" />
             <h1 className="font-black text-lg">Admin · Shadvert</h1>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 font-bold">
+              online {onlineCount}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -165,7 +221,11 @@ export const AdminPanel: React.FC = () => {
               <Zap className="w-4 h-4" />
               Force update všech
             </button>
-            <button type="button" onClick={logout} className="px-3 py-2 rounded-xl bg-slate-800 text-sm font-bold flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={logout}
+              className="px-3 py-2 rounded-xl bg-slate-800 text-sm font-bold flex items-center gap-1.5"
+            >
               <LogOut className="w-4 h-4" />
               Odhlásit
             </button>
@@ -177,36 +237,116 @@ export const AdminPanel: React.FC = () => {
         {error && <p className="text-rose-400 text-sm font-bold">{error}</p>}
         {msg && <p className="text-emerald-400 text-sm font-bold">{msg}</p>}
 
+        <p className="text-xs text-slate-500 leading-relaxed">
+          Online = heartbeat do {Math.round(onlineWindowMs / 60000)} min. Každé zařízení musí mít v appce
+          vyplněný <strong className="text-slate-400">rodinný kód</strong> a vlastní název (Asus / Blackview /
+          Tab). Stejný prohlížeč / nové okno = stejné ID, ne nová relace.
+        </p>
+
         <section>
-          <h2 className="font-black text-lg mb-3 flex items-center gap-2">
-            <Smartphone className="w-5 h-5 text-cyan-400" />
-            Zařízení ({devices.length})
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h2 className="font-black text-lg flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-cyan-400" />
+              Zařízení ({devices.length}) · online {onlineDevices.length}
+              {recentDevices.length > 0 && (
+                <span className="text-sm font-bold text-amber-400/90">· nedávno {recentDevices.length}</span>
+              )}
+            </h2>
+            <label className="text-xs text-slate-400 flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hideBots}
+                onChange={(e) => setHideBots(e.target.checked)}
+                className="rounded"
+              />
+              Skrýt boty / crawlery
+            </label>
+          </div>
           {devices.length === 0 ? (
-            <p className="text-slate-500 text-sm">Zatím žádný heartbeat. Otevři appku na tabletu s rodinným kódem.</p>
+            <p className="text-slate-500 text-sm">
+              Zatím žádný heartbeat. Na každém telefonu: Rodinné propojení → kód + název → Uložit a přihlásit k
+              adminu.
+            </p>
           ) : (
             <div className="space-y-2">
-              {devices.map((d) => (
-                <div
-                  key={d.deviceId}
-                  className="rounded-2xl border border-slate-800 bg-[#121214] p-4 flex flex-wrap items-center justify-between gap-2"
-                >
-                  <div>
-                    <p className="font-bold flex items-center gap-2">
-                      {d.online ? (
-                        <Wifi className="w-4 h-4 text-emerald-400" />
-                      ) : (
-                        <WifiOff className="w-4 h-4 text-slate-500" />
+              {devices.map((d) => {
+                const status = d.status || (d.online ? 'online' : 'offline');
+                return (
+                  <div
+                    key={d.deviceId}
+                    className={`rounded-2xl border p-4 flex flex-wrap items-center justify-between gap-2 ${
+                      status === 'online'
+                        ? 'border-emerald-800/60 bg-emerald-950/20'
+                        : status === 'recent'
+                          ? 'border-amber-900/40 bg-[#121214]'
+                          : 'border-slate-800 bg-[#121214]'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-bold flex flex-wrap items-center gap-2">
+                        {status === 'online' ? (
+                          <Wifi className="w-4 h-4 text-emerald-400 shrink-0" />
+                        ) : status === 'recent' ? (
+                          <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                        ) : (
+                          <WifiOff className="w-4 h-4 text-slate-500 shrink-0" />
+                        )}
+                        <span className="truncate">{d.label || 'Bez názvu'}</span>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full ${
+                            status === 'online'
+                              ? 'bg-emerald-950 text-emerald-400'
+                              : status === 'recent'
+                                ? 'bg-amber-950 text-amber-300'
+                                : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {status === 'online' ? 'online' : status === 'recent' ? 'nedávno' : 'offline'}
+                        </span>
+                        {d.platform && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
+                            {d.platform}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        v{d.appVersion || '?'} · před {formatAge(d.ageMs)} ·{' '}
+                        {new Date(d.lastSeen).toLocaleString('cs-CZ')} · {d.deviceId.slice(0, 8)}…
+                      </p>
+                      {d.userAgent && (
+                        <p className="text-[10px] text-slate-600 mt-0.5 truncate max-w-xl" title={d.userAgent}>
+                          {d.userAgent}
+                        </p>
                       )}
-                      {d.label}
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${d.online ? 'bg-emerald-950 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                        {d.online ? 'online' : 'offline'}
-                      </span>
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      v{d.appVersion || '?'} · {new Date(d.lastSeen).toLocaleString('cs-CZ')} · {d.deviceId.slice(0, 8)}…
-                    </p>
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <h2 className="font-black text-lg mb-3 flex items-center gap-2">
+            <FolderOpen className="w-5 h-5 text-sky-400" />
+            Exporty v appce (data/exports)
+          </h2>
+          {exportsList.length === 0 ? (
+            <p className="text-slate-500 text-sm">
+              Zatím žádný soubor. Export CSV / JSON z appky se při rodinném kódu ukládá sem na Lenovo.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {exportsList.map((f) => (
+                <div
+                  key={f.fileName}
+                  className="rounded-xl border border-slate-800 bg-[#121214] px-3 py-2 text-xs flex flex-wrap justify-between gap-2"
+                >
+                  <span className="font-mono text-slate-300 break-all">{f.fileName}</span>
+                  <span className="text-slate-500">
+                    {f.deviceLabel || '—'} · {Math.round(f.bytes / 1024)} kB ·{' '}
+                    {new Date(f.mtime).toLocaleString('cs-CZ')}
+                  </span>
                 </div>
               ))}
             </div>
@@ -230,8 +370,8 @@ export const AdminPanel: React.FC = () => {
                         h.safetyLevel === 'PODVOD'
                           ? 'bg-rose-950 text-rose-400'
                           : h.safetyLevel === 'DUVERYHODNE'
-                          ? 'bg-emerald-950 text-emerald-400'
-                          : 'bg-amber-950 text-amber-400'
+                            ? 'bg-emerald-950 text-emerald-400'
+                            : 'bg-amber-950 text-amber-400'
                       }`}
                     >
                       {h.safetyLevel}

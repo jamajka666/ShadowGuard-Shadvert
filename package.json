@@ -10,9 +10,11 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx --test tests/ssrfGuard.test.ts tests/mapSimpleResult.test.ts tests/phishingValidator.test.ts tests/simpleModeFlag.test.ts",
+    "test": "tsx --test tests/ssrfGuard.test.ts tests/mapSimpleResult.test.ts tests/phishingValidator.test.ts tests/simpleModeFlag.test.ts tests/emailReport.test.ts",
     "security:selfcheck": "tsx --test tests/ssrfGuard.test.ts tests/phishingValidator.test.ts",
-    "smoke": "bash scripts/smoke-beta.sh"
+    "smoke": "bash scripts/smoke-beta.sh",
+    "report:stats": "python3 scripts/daily-stats-report.py",
+    "report:stats:dry": "python3 scripts/daily-stats-report.py --dry-run"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

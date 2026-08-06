@@ -76,6 +76,17 @@ ingress:
 
 **Nikdy** necommituj `cert.pem`, `*.json` credentials ani `config.yml` s citlivými cestami do veřejného repa (credentials jsou mimo git v `~/.cloudflared/`).
 
+## 4b. Automatický report statistik (volitelné)
+
+Týdenní souhrn z `data/family.json` na tomto PC (systemd timer).  
+Návod: **`docs/DAILY-STATS-CRON.md`**.
+
+```bash
+python3 scripts/daily-stats-report.py --dry-run
+./scripts/install-stats-report-timer.sh   # Mon 08:00
+# Pro e-mail: REPORT_SMTP_* (Gmail App Password) v .env.local
+```
+
 ## 5. Build a spuštění aplikace
 
 ```bash

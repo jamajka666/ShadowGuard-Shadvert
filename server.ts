@@ -31,6 +31,11 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const FAMILY_CODE = process.env.FAMILY_CODE || '';
 const DATA_DIR = path.join(process.cwd(), 'data');
 const FAMILY_DB_PATH = path.join(DATA_DIR, 'family.json');
+const EXPORTS_DIR = path.join(DATA_DIR, 'exports');
+/** Device is "online" if heartbeat within this window (ms). Was 2 min — too aggressive for background tabs. */
+const DEVICE_ONLINE_MS = Number(process.env.DEVICE_ONLINE_MS) || 5 * 60 * 1000;
+const DEVICE_RECENT_MS = Number(process.env.DEVICE_RECENT_MS) || 24 * 60 * 60 * 1000;
+const MAX_EXPORT_BYTES = Number(process.env.MAX_EXPORT_BYTES) || 2_000_000;
 const VERDICT_CACHE_TTL_MS = Number(process.env.VERDICT_CACHE_TTL_MS) || 10 * 60 * 1000;
 const MAX_URL_CHARS = Number(process.env.MAX_URL_CHARS) || 2000;
 const MAX_USER_NOTE_CHARS = Number(process.env.MAX_USER_NOTE_CHARS) || 2000;
@@ -159,6 +164,28 @@ function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
+  if (!fs.existsSync(EXPORTS_DIR)) {
+    fs.mkdirSync(EXPORTS_DIR, { recursive: true });
+  }
+}
+
+function platformHintFromUa(ua?: string): string {
+  if (!ua) return 'neznámé';
+  const s = ua;
+  if (/bot|crawl|spider|fossick|slurp/i.test(s)) return 'bot';
+  if (/iPhone/i.test(s)) return 'iPhone';
+  if (/iPad/i.test(s)) return 'iPad';
+  if (/Android/i.test(s) && /Mobile/i.test(s)) return 'Android telefon';
+  if (/Android/i.test(s)) return 'Android tablet';
+  if (/Windows/i.test(s)) return 'Windows';
+  if (/Macintosh|Mac OS/i.test(s)) return 'Mac';
+  if (/Linux/i.test(s)) return 'Linux';
+  return 'jiné';
+}
+
+function safeExportBaseName(name: string): string {
+  const base = path.basename(String(name || 'export.bin')).replace(/[^a-zA-Z0-9._-]+/g, '_');
+  return base.slice(0, 120) || 'export.bin';
 }
 
 function loadFamilyDb(): FamilyDb {
@@ -280,13 +307,117 @@ app.get('/api/family/devices', (req, res) => {
   if (!requireAdmin(req, res)) return;
   const db = loadFamilyDb();
   const now = Date.now();
+  const hideBots = String(req.query.hideBots || '1') !== '0';
   const list = Object.values(db.devices)
-    .map((d) => ({
-      ...d,
-      online: now - d.lastSeen < 120_000,
-    }))
+    .map((d) => {
+      const age = now - (d.lastSeen || 0);
+      const online = age >= 0 && age < DEVICE_ONLINE_MS;
+      const recent = !online && age >= 0 && age < DEVICE_RECENT_MS;
+      const platform = platformHintFromUa(d.userAgent);
+      const isBot = platform === 'bot';
+      return {
+        ...d,
+        online,
+        recent,
+        status: online ? 'online' : recent ? 'recent' : 'offline',
+        platform,
+        isBot,
+        ageMs: age,
+      };
+    })
+    .filter((d) => (hideBots ? !d.isBot : true))
     .sort((a, b) => b.lastSeen - a.lastSeen);
-  res.json({ devices: list, serverTime: now });
+  const onlineCount = list.filter((d) => d.online).length;
+  res.json({
+    devices: list,
+    serverTime: now,
+    onlineCount,
+    onlineWindowMs: DEVICE_ONLINE_MS,
+    recentWindowMs: DEVICE_RECENT_MS,
+  });
+});
+
+/** Save export file into data/exports on Lenovo (family-auth, not public dump). */
+app.post('/api/family/save-export', (req, res) => {
+  const { familyCode, deviceId, deviceLabel, fileName, contentBase64 } = req.body || {};
+  if (!FAMILY_CODE) {
+    return res.status(503).json({ error: 'Rodinný sync není na serveru nakonfigurován' });
+  }
+  if (!familyCodeOk(familyCode)) {
+    return res.status(403).json({ error: 'Neplatný rodinný kód' });
+  }
+  if (!contentBase64 || typeof contentBase64 !== 'string') {
+    return res.status(400).json({ error: 'Chybí contentBase64' });
+  }
+  let buf: Buffer;
+  try {
+    buf = Buffer.from(contentBase64, 'base64');
+  } catch {
+    return res.status(400).json({ error: 'Neplatný base64' });
+  }
+  if (buf.length === 0 || buf.length > MAX_EXPORT_BYTES) {
+    return res.status(400).json({ error: `Soubor mimo limit (max ${MAX_EXPORT_BYTES} B)` });
+  }
+  ensureDataDir();
+  const safe = safeExportBaseName(fileName);
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const dev = String(deviceId || 'device')
+    .replace(/[^a-zA-Z0-9_-]+/g, '')
+    .slice(0, 12);
+  const finalName = `${stamp}_${dev}_${safe}`;
+  const dest = path.join(EXPORTS_DIR, finalName);
+  // path traversal guard
+  if (!dest.startsWith(EXPORTS_DIR)) {
+    return res.status(400).json({ error: 'Neplatná cesta' });
+  }
+  try {
+    fs.writeFileSync(dest, buf);
+    const meta = {
+      savedAt: Date.now(),
+      deviceId: String(deviceId || '').slice(0, 80),
+      deviceLabel: String(deviceLabel || '').slice(0, 80),
+      fileName: finalName,
+      bytes: buf.length,
+    };
+    fs.writeFileSync(`${dest}.meta.json`, JSON.stringify(meta, null, 2), 'utf8');
+    res.json({ ok: true, path: `data/exports/${finalName}`, bytes: buf.length });
+  } catch (e) {
+    console.warn('[exports] save failed', e);
+    res.status(500).json({ error: 'Uložení selhalo' });
+  }
+});
+
+app.get('/api/family/exports', (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  ensureDataDir();
+  try {
+    const files = fs
+      .readdirSync(EXPORTS_DIR)
+      .filter((f) => !f.endsWith('.meta.json') && !f.startsWith('.'))
+      .map((f) => {
+        const full = path.join(EXPORTS_DIR, f);
+        const st = fs.statSync(full);
+        let meta: Record<string, unknown> = {};
+        try {
+          meta = JSON.parse(fs.readFileSync(`${full}.meta.json`, 'utf8'));
+        } catch {
+          /* ignore */
+        }
+        return {
+          fileName: f,
+          bytes: st.size,
+          mtime: st.mtimeMs,
+          deviceLabel: meta.deviceLabel,
+          deviceId: meta.deviceId,
+        };
+      })
+      .sort((a, b) => b.mtime - a.mtime)
+      .slice(0, 50);
+    res.json({ exports: files, dir: 'data/exports' });
+  } catch (e) {
+    console.warn('[exports] list failed', e);
+    res.json({ exports: [], dir: 'data/exports' });
+  }
 });
 
 app.get('/api/family/history', (req, res) => {

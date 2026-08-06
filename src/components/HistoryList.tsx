@@ -13,6 +13,7 @@ import {
   ChevronUp,
   Layers,
   Sparkles,
+  Mail,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -29,6 +30,7 @@ import {
 } from 'recharts';
 import { AdCheckResult } from '../types';
 import { exportHistoryToCsv } from '../utils/csvExport';
+import { markStatsReportSent, openStatsMailto } from '../utils/emailReport';
 
 interface HistoryListProps {
   history: AdCheckResult[];
@@ -132,8 +134,32 @@ export const HistoryList: React.FC<HistoryListProps> = ({
 }) => {
   const [showChart, setShowChart] = useState(true);
   const [chartType, setChartType] = useState<'bar' | 'pie'>('bar');
+  const [emailHint, setEmailHint] = useState<string | null>(null);
 
   if (history.length === 0) return null;
+
+  const sendStatsEmail = () => {
+    const result = openStatsMailto(history);
+    if (result.ok) {
+      markStatsReportSent();
+      setEmailHint(
+        result.truncated
+          ? 'E-mailová appka se otevřela (text zkrácen). Zkontrolujte a odešlete. Volitelné — nic nešlo přes server Shadvert.'
+          : 'E-mailová appka se otevřela se statistikou. Zkontrolujte a odešlete, pokud chcete. Neposíláme nic automaticky.'
+      );
+    } else {
+      setEmailHint('E-mail se nepodařilo otevřít. Zkuste Export CSV a sdílení.');
+    }
+  };
+
+  const exportCsv = async () => {
+    const r = await exportHistoryToCsv(history);
+    if (r === 'empty') setEmailHint('Historie je prázdná.');
+    else if (r === 'failed') setEmailHint('Export se nepodařil.');
+    else if (r === 'saved-local')
+      setEmailHint('CSV uloženo do složky ShadowGuard-exports (+ data/exports na Lenovu s rodinným kódem).');
+    else setEmailHint('CSV export hotov. S rodinným kódem se kopie ukládá do data/exports na serveru.');
+  };
 
   const isCyber = themeMode === 'cyber';
   const isContrast = themeMode === 'contrast' || highContrast;
@@ -249,7 +275,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
           <button
             type="button"
             onClick={() => {
-              void exportHistoryToCsv(history);
+              void exportCsv();
             }}
             className={`text-xs font-bold flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shadow-sm ${
               isCyber
@@ -258,10 +284,26 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                 ? 'bg-yellow-400 text-black font-black border border-yellow-500'
                 : 'bg-[#B8860B] hover:bg-[#D4AF37] text-black font-black border border-[#D4AF37]'
             }`}
-            title="Exportovat historii (CSV) — na iPhonu přes Sdílet / Soubory"
+            title="Export CSV → ShadowGuard-exports / data/exports na Lenovu"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>Export CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={sendStatsEmail}
+            className={`text-xs font-bold flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shadow-sm border ${
+              isCyber
+                ? 'bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border-sky-500/40'
+                : isContrast
+                ? 'bg-black text-yellow-300 border-yellow-400'
+                : 'bg-sky-950/50 hover:bg-sky-900/60 text-sky-200 border-sky-600/50'
+            }`}
+            title="Volitelně otevřít e-mail se souhrnem statistik (přes vaši poštovní appku, ne přes server)"
+          >
+            <Mail className="w-4 h-4" />
+            <span>E-mail statistika</span>
           </button>
 
           <button
@@ -280,6 +322,12 @@ export const HistoryList: React.FC<HistoryListProps> = ({
           </button>
         </div>
       </div>
+
+      {emailHint && (
+        <p className="mb-4 text-xs text-sky-200/90 bg-sky-950/40 border border-sky-800/40 rounded-xl px-3 py-2">
+          {emailHint}
+        </p>
+      )}
 
       {/* Category Chart Section */}
       {showChart && (

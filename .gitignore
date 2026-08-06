@@ -11,7 +11,10 @@ coverage/
 
 # Runtime family DB & secrets
 data/*.json
+data/reports/
+data/exports/
 !data/.gitkeep
+
 
 # Raw heavy brand sources (optimized copies live in public/brand)
 app-logo/

@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Palette, ClipboardList, X, Download, Check, Copy, Share2 } from 'lucide-react';
+import { Palette, ClipboardList, X, Download, Check, Copy, Share2, Mail } from 'lucide-react';
 import { shareOrDownloadFile, copyTextToClipboard } from '../utils/shareFile';
+import { exportFileNameFlat } from '../utils/exportPaths';
+import {
+  mapSwatchIdToLookOption,
+  openSurveyMailto,
+} from '../utils/emailReport';
 
 /** First Creation lab: color swatchbook + short feedback questionnaire (non-breaking for dad's main path). */
 
@@ -229,6 +234,28 @@ const QUESTIONS: { id: string; q: string; options: string[] }[] = [
 ];
 
 const STORAGE_KEY = 'shadvert_first_creation_lab_feedback';
+const SWATCH_VOTE_KEY = 'shadvert_swatch_vote';
+
+/** Persist swatch pick into lab feedback answers (swatch free-text + look radio). */
+export function applySwatchToSurveyAnswers(swatch: ColorSwatch): void {
+  try {
+    localStorage.setItem(SWATCH_VOTE_KEY, swatch.id);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const prev: Record<string, string> = raw ? JSON.parse(raw) : {};
+    const next: Record<string, string> = {
+      ...prev,
+      swatch: `${swatch.name} (${swatch.id})`,
+    };
+    const look = mapSwatchIdToLookOption(swatch.id);
+    // Click on a color is an explicit choice for the look / motif question
+    if (look) {
+      next.look = look;
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}
 
 type Props = {
   themeMode?: string;
@@ -237,6 +264,7 @@ type Props = {
 export function DesignLabFooter({ themeMode }: Props) {
   const [swatchOpen, setSwatchOpen] = useState(false);
   const [surveyOpen, setSurveyOpen] = useState(false);
+  const [swatchHint, setSwatchHint] = useState<string | null>(null);
   const isLight = themeMode === 'classic';
   const isContrast = themeMode === 'highContrast';
   const btn =
@@ -270,29 +298,54 @@ export function DesignLabFooter({ themeMode }: Props) {
       <p className={`text-[10px] mt-2 max-w-md mx-auto leading-snug ${hint}`}>
         First Creation lab — jen nápady a zpětná vazba. Nemění hlavní vzhled pro tátu.
       </p>
+      {swatchHint && (
+        <p className="text-[11px] mt-1.5 text-center text-emerald-400/90 max-w-md mx-auto">
+          {swatchHint}{' '}
+          <button
+            type="button"
+            className="underline font-semibold"
+            onClick={() => {
+              setSwatchHint(null);
+              setSurveyOpen(true);
+            }}
+          >
+            Otevřít dotazník
+          </button>
+        </p>
+      )}
 
-      {swatchOpen && <SwatchModal onClose={() => setSwatchOpen(false)} />}
+      {swatchOpen && (
+        <SwatchModal
+          onClose={() => setSwatchOpen(false)}
+          onPicked={(s) => {
+            setSwatchHint(`Barva „${s.name}“ je propsaná do otázky o barevném motivu.`);
+          }}
+        />
+      )}
       {surveyOpen && <SurveyModal onClose={() => setSurveyOpen(false)} />}
     </>
   );
 }
 
-function SwatchModal({ onClose }: { onClose: () => void }) {
+function SwatchModal({
+  onClose,
+  onPicked,
+}: {
+  onClose: () => void;
+  onPicked?: (s: ColorSwatch) => void;
+}) {
   const [picked, setPicked] = useState<string | null>(() => {
     try {
-      return localStorage.getItem('shadvert_swatch_vote');
+      return localStorage.getItem(SWATCH_VOTE_KEY);
     } catch {
       return null;
     }
   });
 
-  const vote = (id: string) => {
-    setPicked(id);
-    try {
-      localStorage.setItem('shadvert_swatch_vote', id);
-    } catch {
-      /* ignore */
-    }
+  const vote = (s: ColorSwatch) => {
+    setPicked(s.id);
+    applySwatchToSurveyAnswers(s);
+    onPicked?.(s);
   };
 
   return (
@@ -301,7 +354,9 @@ function SwatchModal({ onClose }: { onClose: () => void }) {
         <div className="sticky top-0 flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-800 bg-slate-950/95">
           <div>
             <h2 className="text-base font-bold text-white">Vzorkovnice barev</h2>
-            <p className="text-xs text-slate-400">15 nápadů — kliknutím označíte favorita (jen pro nás, neaplikuje se automaticky)</p>
+            <p className="text-xs text-slate-400">
+              15 nápadů — kliknutím označíte favorita a propsání do dotazníku (vzhled appky se nemění)
+            </p>
           </div>
           <button type="button" onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:bg-slate-800" aria-label="Zavřít">
             <X className="w-5 h-5" />
@@ -312,7 +367,7 @@ function SwatchModal({ onClose }: { onClose: () => void }) {
             <button
               key={s.id}
               type="button"
-              onClick={() => vote(s.id)}
+              onClick={() => vote(s)}
               className={`text-left rounded-xl border overflow-hidden transition ${
                 picked === s.id ? 'border-emerald-400 ring-2 ring-emerald-500/40' : 'border-slate-700 hover:border-slate-500'
               }`}
@@ -357,15 +412,32 @@ function SwatchModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function SurveyModal({ onClose }: { onClose: () => void }) {
-  const [answers, setAnswers] = useState<Record<string, string>>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
+function loadSurveyAnswers(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const answers: Record<string, string> = raw ? JSON.parse(raw) : {};
+    // Prefill swatch free-text from last color vote if empty
+    if (!answers.swatch) {
+      const voteId = localStorage.getItem(SWATCH_VOTE_KEY);
+      if (voteId) {
+        const sw = COLOR_SWATCHES.find((c) => c.id === voteId);
+        if (sw) {
+          answers.swatch = `${sw.name} (${sw.id})`;
+          const look = mapSwatchIdToLookOption(sw.id);
+          if (look && !answers.look) answers.look = look;
+        } else {
+          answers.swatch = voteId;
+        }
+      }
     }
-  });
+    return answers;
+  } catch {
+    return {};
+  }
+}
+
+function SurveyModal({ onClose }: { onClose: () => void }) {
+  const [answers, setAnswers] = useState<Record<string, string>>(() => loadSurveyAnswers());
   const [saved, setSaved] = useState(false);
   const [exportHint, setExportHint] = useState<string | null>(null);
 
@@ -388,7 +460,7 @@ function SurveyModal({ onClose }: { onClose: () => void }) {
     savedAt: new Date().toISOString(),
     swatchVote: (() => {
       try {
-        return localStorage.getItem('shadvert_swatch_vote');
+        return localStorage.getItem(SWATCH_VOTE_KEY);
       } catch {
         return null;
       }
@@ -400,19 +472,23 @@ function SurveyModal({ onClose }: { onClose: () => void }) {
     const payload = buildPayload();
     const json = JSON.stringify(payload, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
-    const fileName = `shadvert-first-creation-feedback-${Date.now()}.json`;
+    const fileName = exportFileNameFlat('feedback-dotaznik', 'json');
     const result = await shareOrDownloadFile(blob, fileName, {
       mimeType: 'application/json',
       title: 'ShadowGuard feedback',
       text: 'Odpovědi z dotazníku First Creation',
+      saveToAppServer: true,
+      preferAppFolder: true,
     });
     setSaved(true);
     if (result === 'shared') {
-      setExportHint('Sdíleno — např. do Souborů, Mailu nebo AirDrop.');
+      setExportHint('Sdíleno — např. do Souborů, Mailu nebo AirDrop. Kopie i do data/exports na serveru (s kódem).');
     } else if (result === 'opened') {
       setExportHint('Soubor otevřen — na iPhonu použijte Sdílet → Uložit do Souborů.');
+    } else if (result === 'saved-local') {
+      setExportHint('Uloženo do složky ShadowGuard-exports (a na server data/exports, pokud máte rodinný kód).');
     } else if (result === 'downloaded') {
-      setExportHint('JSON stažen do zařízení.');
+      setExportHint('JSON stažen · na Lenovu se ukládá i do data/exports (s rodinným kódem).');
     } else {
       setExportHint('Export se nepodařil — zkuste „Zkopírovat odpovědi“.');
     }
@@ -429,6 +505,25 @@ function SurveyModal({ onClose }: { onClose: () => void }) {
     );
   };
 
+  const sendEmail = () => {
+    const result = openSurveyMailto(buildPayload());
+    setSaved(true);
+    if (result.ok === true) {
+      setExportHint(
+        result.truncated
+          ? 'E-mailová appka se otevřela (tělo zkráceno kvůli limitu). Zkontrolujte a odešlete. Nic nešlo přes server Shadvert.'
+          : 'E-mailová appka se otevřela s předvyplněným reportem. Stačí zkontrolovat a odeslat. Nic neposíláme přes server Shadvert.'
+      );
+    } else {
+      const why = result.ok === false ? result.reason : 'blocked';
+      setExportHint(
+        why === 'empty'
+          ? 'Není co odeslat — vyplňte aspoň jednu odpověď.'
+          : 'E-mail se nepodařilo otevřít. Zkuste Sdílet JSON nebo Zkopírovat odpovědi.'
+      );
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-3 bg-black/70 backdrop-blur-sm safe-area-inset"
@@ -441,7 +536,7 @@ function SurveyModal({ onClose }: { onClose: () => void }) {
           <div>
             <h2 className="text-base font-bold text-white">Krátký dotazník</h2>
             <p className="text-xs text-slate-400">
-              5–10 otázek · jen v tomto prohlížeči · sdílejte / zkopírujte JSON (i z iPhonu)
+              Volitelná zpětná vazba · zůstává v tomto zařízení, dokud sami nesdílíte / neodešlete e-mail
             </p>
           </div>
           <button type="button" onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:bg-slate-800" aria-label="Zavřít">
@@ -489,24 +584,34 @@ function SurveyModal({ onClose }: { onClose: () => void }) {
             </div>
           ))}
 
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col gap-2">
             <button
               type="button"
-              onClick={() => void download()}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white"
+              onClick={sendEmail}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-sky-600 hover:bg-sky-500 text-white"
             >
-              <Share2 className="w-4 h-4" />
-              <Download className="w-4 h-4" />
-              {saved ? 'Sdílet / stáhnout znovu' : 'Sdílet nebo stáhnout (JSON)'}
+              <Mail className="w-4 h-4" />
+              Odeslat na e-mail (volitelné)
             </button>
-            <button
-              type="button"
-              onClick={() => void copyAnswers()}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600"
-            >
-              <Copy className="w-4 h-4" />
-              Zkopírovat odpovědi
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={() => void download()}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white"
+              >
+                <Share2 className="w-4 h-4" />
+                <Download className="w-4 h-4" />
+                {saved ? 'Sdílet / stáhnout znovu' : 'Sdílet nebo stáhnout (JSON)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyAnswers()}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600"
+              >
+                <Copy className="w-4 h-4" />
+                Zkopírovat odpovědi
+              </button>
+            </div>
           </div>
           {exportHint && (
             <p className="text-xs text-emerald-300/90 text-center bg-emerald-950/40 border border-emerald-800/50 rounded-xl px-3 py-2">
@@ -514,7 +619,7 @@ function SurveyModal({ onClose }: { onClose: () => void }) {
             </p>
           )}
           <p className="text-[11px] text-slate-500 text-center">
-            First Creation lab · data neposíláme na server · pro zakladatele / testery · iPhone: Sdílet → Soubory / Mail
+            First Creation lab · neposíláme data automaticky · e-mail jde jen přes vaši poštovní appku (ne přes server Shadvert)
           </p>
         </div>
       </div>

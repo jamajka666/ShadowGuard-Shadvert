@@ -1,0 +1,14 @@
+[Unit]
+Description=Timer: ShadowGuard stats report (default weekly Mon 08:00)
+# Soft default — change OnCalendar in install script or override drop-in
+
+[Timer]
+# Weekly Monday 08:00 local time (less intrusive than daily)
+OnCalendar=Mon *-*-* 08:00:00
+# Catch up if PC was off at scheduled time
+Persistent=true
+# Randomize a bit so not always exact second
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

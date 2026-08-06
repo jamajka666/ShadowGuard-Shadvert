@@ -1,0 +1,12 @@
+[Unit]
+Description=ShadowGuard Shadvert weekly/daily stats e-mail report
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jamajka/projekty/moje-app
+Environment=PATH=/usr/bin:/bin
+EnvironmentFile=-/home/jamajka/projekty/moje-app/.env.local
+ExecStart=/usr/bin/python3 /home/jamajka/projekty/moje-app/scripts/daily-stats-report.py
+# Log to journal: journalctl --user -u shadvert-stats-report.service

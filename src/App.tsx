@@ -17,6 +17,7 @@ import { RiskLevelToast } from './components/RiskLevelToast';
 import { FamilySettingsCard } from './components/FamilySettingsCard';
 import { AdminPanel } from './components/AdminPanel';
 import { DesignLabFooter } from './components/DesignLabModals';
+import { StatsEmailPromptBanner } from './components/StatsEmailPromptBanner';
 import { DesignV2Sandbox } from './design-v2/DesignV2Sandbox';
 import { SimpleResultCard } from './design-v2/SimpleResultCard';
 import { mapSimpleResult } from './design-v2/mapSimpleResult';
@@ -284,6 +285,12 @@ export default function App() {
         safetyLevel={toastLevel}
         headline={toastHeadline}
         onClose={() => setToastLevel(null)}
+      />
+
+      {/* Soft optional stats e-mail (weekly default, dismissible — never auto-sends) */}
+      <StatsEmailPromptBanner
+        history={history}
+        variant={isSimpleMode || themeMode === 'classic' ? 'light' : 'dark'}
       />
 
       {isSimpleMode && (
