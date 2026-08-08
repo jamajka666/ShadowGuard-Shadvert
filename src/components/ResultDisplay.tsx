@@ -389,10 +389,13 @@ ${result.inputUrl ? `Odkaz: ${result.inputUrl}` : ''}`;
 
           <div className="text-right">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-              Skóre důvěryhodnosti:
+              Skóre podle našich pravidel:
             </span>
             <span className={`text-2xl font-black ${isScam ? 'text-rose-500' : isCaution ? 'text-amber-400' : 'text-emerald-400'}`}>
               {result.trustScore} / 100
+            </span>
+            <span className="block text-[10px] opacity-70 font-normal mt-0.5 max-w-[12rem] ml-auto leading-tight">
+              {result.trustScoreLabel || 'Nejde o procento bezpečnosti'}
             </span>
           </div>
         </div>
