@@ -25,6 +25,17 @@ Guarantee: **100% claim traceability** relative to listed evidence — not absol
 
 `src/trust/aiOutputValidator.ts` — on FAIL, user sees hybrid/template text (`verdictSource: ai_rejected`), never the invalid AI claims.
 
+### P0 claim policy (PR #1 review)
+
+- Banlist ≠ claim integrity. Invented “IČO / ověřený obchod / dlouhá historie” also FAIL.
+- Structured user-facing claims (`riskFactors`, `positiveFactors`, `sellerChecks`, `trustedAlternatives`) are **server-built** from FACTS + Rule Engine (`mergeResult.ts`).
+- AI may only phrase `headline` / `summaryForSenior` / `actionAdvice` after validation.
+- If AI emits claim arrays, each item must bind `factIds[]` to server FACTS — otherwise reject.
+
+### Grounding
+
+`groundingSources` are **candidates** (`groundingIsNotEvidence: true`), not automatic proof.
+
 ## Forbidden categories
 
 - LIKELY_AUTHENTIC  
@@ -37,13 +48,17 @@ Use: `VERIFIED | UNVERIFIED`, `NO_VERIFIED_THREAT_FOUND`, internal `NEVIME` → 
 
 | Module | Role |
 |--------|------|
-| `src/trust/truthContract.ts` | enums, banlist, official hosts |
-| `src/trust/facts.ts` | Layer 1 FACT bundle |
+| `src/trust/truthContract.ts` | enums, banlist, official hosts, world-claim patterns |
+| `src/trust/facts.ts` | Layer 1 FACT bundle (VERIFIED / DERIVED / UNVERIFIED) |
 | `src/trust/ruleEngine.ts` | Layer 2 decision |
-| `src/trust/aiPresentation.ts` | prompts |
+| `src/trust/aiPresentation.ts` | prompts (page content = DATA not instructions) |
 | `src/trust/aiOutputValidator.ts` | reject |
-| `src/trust/mergeResult.ts` | API response merge |
-| `server.ts` | wire analyze-ad + scam-alerts + family lockout |
+| `src/trust/mergeResult.ts` | API response merge; server-owned claim fields |
+| `server.ts` | wire analyze-ad + scam-alerts + family lockout (`TRUST_PROXY`) |
+
+## Deferred: Adversarial Security Review
+
+Separate workstream (not this PR): source integrity, evidence poisoning, parser confusion, replay, race conditions, reputation manipulation — lab “break our own system” before public trust claims.
 
 ## UI note
 

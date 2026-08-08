@@ -49,6 +49,15 @@ Family
 - In-memory fail counter + temporary lockout per IP after repeated invalid codes.  
 - **Does not** fix single-secret model — only reduces brute-force.
 
+### IP / proxy model (P1 PR #1)
+
+| `TRUST_PROXY` | Lockout key |
+|---------------|-------------|
+| unset / `0` (default) | `req.socket.remoteAddress` only — **X-Forwarded-For ignored** (spoof-resistant on direct bind) |
+| `1` / `true` | honor `X-Forwarded-For` (left-most) or `CF-Connecting-IP` / `X-Real-IP` — **only** when a trusted reverse proxy is in front |
+
+Production with Cloudflare Tunnel → localhost should set `TRUST_PROXY=1` after confirming tunnel is the only path to the app.
+
 ## Non-goals for first enrollment PR
 
 - OAuth / third-party IdP  

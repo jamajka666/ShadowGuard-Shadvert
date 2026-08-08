@@ -50,7 +50,7 @@ export type OfficialDomainStatus =
   | 'PROKAZANO_NEOFICIALNI'
   | 'NEOVERENO';
 
-export type VerificationStatus = 'VERIFIED' | 'UNVERIFIED';
+export type VerificationStatus = 'VERIFIED' | 'DERIVED' | 'UNVERIFIED';
 
 export interface EvidenceFact {
   factId?: string;

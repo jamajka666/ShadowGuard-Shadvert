@@ -3,9 +3,9 @@
  * Claim traceability over absolute world-truth guarantees.
  */
 
-export const TRUTH_CONTRACT_VERSION = '1.0';
+export const TRUTH_CONTRACT_VERSION = '1.0.1';
 /** Bump when rule mapping / kill thresholds change (invalidates verdict cache). */
-export const RULES_VERSION_TRUTH = 'rules-2026-08-08-truth-contract.2';
+export const RULES_VERSION_TRUTH = 'rules-2026-08-08-truth-contract.3';
 
 /** Internal analysis verdict before First Creation UI mapping. */
 export type InternalVerdict = 'DUVERYHODNE' | 'OPATRNOSTI' | 'PODVOD' | 'NEVIME';
@@ -13,7 +13,11 @@ export type InternalVerdict = 'DUVERYHODNE' | 'OPATRNOSTI' | 'PODVOD' | 'NEVIME'
 /** UI-facing safety levels (First Creation keeps 3 colours). */
 export type UiSafetyLevel = 'DUVERYHODNE' | 'OPATRNOSTI' | 'PODVOD';
 
-export type VerificationStatus = 'VERIFIED' | 'UNVERIFIED';
+/**
+ * VERIFIED = measured from source; DERIVED = calculated from a VERIFIED fact;
+ * UNVERIFIED = missing / cannot assert.
+ */
+export type VerificationStatus = 'VERIFIED' | 'DERIVED' | 'UNVERIFIED';
 
 export type OfficialDomainStatus =
   | 'PROKAZANO_OFICIALNI'
@@ -45,6 +49,63 @@ export interface FactItem {
   collectedAt: string;
   verificationStatus: VerificationStatus;
   evidenceIds?: string[];
+  /** For DERIVED: parent factId(s) used in calculation. */
+  derivedFromFactIds?: string[];
+}
+
+/**
+ * Free-text patterns that assert unmeasured world-facts (P0 review PR #1).
+ * Ban in AI presentation unless only restating server FACTS (enforced by stripping structured claims).
+ */
+export const UNSUBSTANTIATED_WORLD_CLAIM_PATTERNS: RegExp[] = [
+  /\bi[cč]o\b/i,
+  /dlouhou histori/i,
+  /dlouholetou/i,
+  /ověřený prodejce/i,
+  /ověřený obchod/i,
+  /ověřený e-?shop/i,
+  /certifikovan/i,
+  /tisíce spokojených/i,
+  /spolehlivý prodejce/i,
+  /oficiální partner/i,
+  /garance nákupu/i,
+  /heuréka ověř/i,
+  /má uvedené i[cč]o/i,
+  /firma existuje/i,
+  /právnická osoba/i,
+];
+
+/** Known service tips — NOT a per-offer security verdict. */
+export const GENERAL_KNOWN_SERVICE_TIPS = [
+  {
+    name: 'Heureka.cz',
+    url: 'https://www.heureka.cz',
+    description:
+      'Obecná dlouhodobě známá česká služba pro srovnání cen. Toto NENÍ bezpečnostní verdikt k vaší konkrétní nabídce.',
+    badge: 'Obecný tip (ne ověření)',
+  },
+  {
+    name: 'Alza.cz',
+    url: 'https://www.alza.cz',
+    description:
+      'Obecná dlouhodobě známá česká služba. Toto NENÍ důkaz, že vaše nabídka je bezpečná, ani ověření prodejce.',
+    badge: 'Obecný tip (ne ověření)',
+  },
+  {
+    name: 'Bazoš.cz',
+    url: 'https://www.bazos.cz',
+    description:
+      'Známý inzertní portál. I na známém portálu platí opatrnost u soukromých prodejců a osobní předání.',
+    badge: 'Obecný tip (ne ověření)',
+  },
+] as const;
+
+export function containsUnsubstantiatedWorldClaim(text: string): string | null {
+  if (!text) return null;
+  for (const re of UNSUBSTANTIATED_WORLD_CLAIM_PATTERNS) {
+    if (re.test(text)) return re.source;
+  }
+  return null;
 }
 
 export interface SignalItem {

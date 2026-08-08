@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { buildFactBundle } from '../src/trust/facts.ts';
 import { decideFromFacts } from '../src/trust/ruleEngine.ts';
 import { validateAiPresentation } from '../src/trust/aiOutputValidator.ts';
+import { mergeAnalysisResult, generalKnownServiceTips } from '../src/trust/mergeResult.ts';
 import {
   isForbiddenSpeculationText,
   mapInternalVerdictToUi,
@@ -261,6 +262,47 @@ describe('AI Output Validator kill switch', () => {
     assert.equal(v.ok, true);
   });
 
+  it('P0: rejects invented world-claims without "pravděpodobně" (IČO / ověřený obchod)', () => {
+    const cases = [
+      'Prodejce má uvedené IČO a je v pořádku.',
+      'Obchod má dlouhou historii a tisíce spokojených zákazníků.',
+      'Jedná se o ověřený e-shop s garancí nákupu.',
+    ];
+    for (const summaryForSenior of cases) {
+      const v = validateAiPresentation(
+        {
+          headline: 'OK',
+          summaryForSenior,
+          actionAdvice: ['Pokračujte'],
+        },
+        baseDecision,
+        'NEOVERENO'
+      );
+      assert.equal(v.ok, false, `should reject: ${summaryForSenior}`);
+    }
+  });
+
+  it('P0: rejects positiveFactors without factIds', () => {
+    const facts = buildFactBundle({
+      url: 'https://example.com',
+      sslDomainInfo: { domain: 'example.com', isSslValid: true },
+    });
+    const d = decideFromFacts(facts);
+    const v = validateAiPresentation(
+      {
+        headline: 'Shrnutí',
+        summaryForSenior: 'Nemáme dostatek ověřených údajů pro silné tvrzení.',
+        actionAdvice: ['Buďte opatrní'],
+        positiveFactors: [{ id: 'x', title: 'Dlouhá historie', description: 'Obchod funguje roky' }],
+      },
+      d,
+      facts.officialDomainStatus,
+      facts
+    );
+    assert.equal(v.ok, false);
+    if (!v.ok) assert.ok(v.reasons.some((r) => r.includes('factIds')));
+  });
+
   it('adversarial: rejected AI must not be treated as pass (kill switch semantics)', () => {
     const v = validateAiPresentation(
       {
@@ -277,5 +319,67 @@ describe('AI Output Validator kill switch', () => {
     if (!v.ok) {
       assert.ok(v.reasons.length >= 1);
     }
+  });
+});
+
+describe('P1 derived facts + server-owned claims', () => {
+  it('domainAgeYears is DERIVED from creationDate fact', () => {
+    const facts = buildFactBundle({
+      url: 'https://example.com',
+      sslDomainInfo: {
+        domain: 'example.com',
+        isSslValid: true,
+        creationDate: '2018-01-01',
+        domainAgeYears: 8,
+      },
+    });
+    const age = facts.facts.find((f) => f.source === 'rdap_whois_derived');
+    const creation = facts.facts.find((f) => f.source === 'rdap_whois');
+    assert.ok(age);
+    assert.equal(age!.verificationStatus, 'DERIVED');
+    assert.ok(creation);
+    assert.equal(creation!.verificationStatus, 'VERIFIED');
+    assert.deepEqual(age!.derivedFromFactIds, [creation!.factId]);
+  });
+
+  it('mergeResult never passes AI positiveFactors inventing world-claims', () => {
+    const facts = buildFactBundle({
+      url: 'https://www.bazos.cz/x',
+      rawText: 'kolo',
+      sslDomainInfo: { domain: 'www.bazos.cz', isSslValid: true, domainAgeYears: 20 },
+    });
+    const decision = decideFromFacts(facts);
+    const merged = mergeAnalysisResult({
+      url: 'https://www.bazos.cz/x',
+      factBundle: facts,
+      decision,
+      ai: {
+        headline: 'OK',
+        summaryForSenior: 'Známá doména ze seznamu. Buďte opatrní u soukromého prodejce.',
+        actionAdvice: ['Osobní předání'],
+        positiveFactors: [
+          { id: 'lie', title: 'IČO', description: 'Prodejce má IČO a dlouhou historii' },
+        ],
+        sellerChecks: ['Prodejce má IČO'],
+      },
+      aiAccepted: true,
+      verdictSource: 'ai',
+      rulesVersion: 'test',
+    });
+    const positives = merged.positiveFactors as { description?: string; title?: string }[];
+    const seller = merged.sellerChecks as string[];
+    assert.ok(Array.isArray(positives));
+    assert.ok(!positives.some((p) => /i[cč]o|dlouhou/i.test(String(p.description) + String(p.title))));
+    assert.equal(seller.length, 0);
+    assert.equal(merged.groundingIsNotEvidence, true);
+    const alts = merged.trustedAlternatives as { badge?: string; claimStatus?: string }[];
+    assert.ok(alts.every((a) => a.claimStatus === 'GENERAL_KNOWN_SERVICE_NOT_VERDICT'));
+    assert.ok(alts.every((a) => /ne ověření/i.test(String(a.badge))));
+  });
+
+  it('generalKnownServiceTips are not security verdicts', () => {
+    const tips = generalKnownServiceTips();
+    assert.ok(tips.length >= 2);
+    assert.ok(tips.every((t) => /ne ověření|NENÍ/i.test(t.description + t.badge)));
   });
 });

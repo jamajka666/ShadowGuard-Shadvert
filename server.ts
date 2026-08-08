@@ -153,9 +153,25 @@ const familyAuthFails = new Map<string, { count: number; lockedUntil: number }>(
 const FAMILY_FAIL_MAX = Number(process.env.FAMILY_FAIL_MAX) || 12;
 const FAMILY_LOCKOUT_MS = Number(process.env.FAMILY_LOCKOUT_MS) || 15 * 60 * 1000;
 
+/**
+ * Client IP for FAMILY fail lockout.
+ * P1 (PR #1): X-Forwarded-For is client-spoofable unless we trust a reverse proxy.
+ * Only honor XFF when TRUST_PROXY=1 (e.g. Cloudflare Tunnel → localhost with trusted hop).
+ * Default: socket remoteAddress only.
+ */
+const TRUST_PROXY =
+  process.env.TRUST_PROXY === '1' || String(process.env.TRUST_PROXY || '').toLowerCase() === 'true';
+
 function clientIp(req: express.Request): string {
-  const xf = req.headers['x-forwarded-for'];
-  if (typeof xf === 'string' && xf.length) return xf.split(',')[0].trim();
+  if (TRUST_PROXY) {
+    const xf = req.headers['x-forwarded-for'];
+    if (typeof xf === 'string' && xf.length) {
+      // Left-most = original client when proxy appends; only use when proxy is trusted
+      return xf.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+    }
+    const realIp = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'];
+    if (typeof realIp === 'string' && realIp.trim()) return realIp.trim();
+  }
   return req.socket.remoteAddress || 'unknown';
 }
 
@@ -1085,7 +1101,8 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
           const validation = validateAiPresentation(
             parsedData,
             decision,
-            factBundle.officialDomainStatus
+            factBundle.officialDomainStatus,
+            factBundle
           );
 
           if (validation.ok === false) {
