@@ -52,11 +52,31 @@ describe('Rule Engine — TLD is SIGNAL only (TRUST-ENGINE-001)', () => {
         url: `https://${host}/`,
         rawText: 'Nabídka zboží, kontakt e-mailem',
         sslDomainInfo: { domain: host, isSslValid: true, domainAgeYears: 5 },
+        // MEDIUM TLD from phishingValidator must NOT be passed as phishingMatched
+        phishingMatched: false,
       });
       const d = decideFromFacts(facts);
       assert.notEqual(d.safetyLevel, 'PODVOD', `${host} must not be PODVOD alone`);
       assert.notEqual(d.safetyLevel, 'DUVERYHODNE', `${host} must not be auto-trusted`);
     }
+  });
+
+  it('MEDIUM TLD phishing flag must not be treated as hard match (contract note)', () => {
+    // Simulates server mapping: only HIGH/kill → phishingMatched
+    const soft = buildFactBundle({
+      url: 'https://random-deal.online/',
+      rawText: 'Běžná nabídka bez kurýra',
+      sslDomainInfo: { domain: 'random-deal.online', isSslValid: true, domainAgeYears: 3 },
+      phishingMatched: false,
+    });
+    assert.equal(decideFromFacts(soft).safetyLevel !== 'PODVOD', true);
+    const hard = buildFactBundle({
+      url: 'https://random-deal.online/',
+      phishingMatched: true,
+      phishingKilled: true,
+      phishingPattern: 'real kill pattern',
+    });
+    assert.equal(decideFromFacts(hard).safetyLevel, 'PODVOD');
   });
 
   it('young domain + cheap TLD without scam markers stays OPATRNOSTI', () => {

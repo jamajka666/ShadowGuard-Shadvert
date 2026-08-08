@@ -911,10 +911,15 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
     }
 
     // Layer 1+2 first: phishing + facts + rule engine (AI never owns the verdict)
+    // TRUST-ENGINE-001: MEDIUM "suspicious TLD alone" is a SIGNAL, not CONFIRMED_THREAT.
+    // Only HIGH / kill-switch matches set phishingMatched → PODVOD in Rule Engine.
     let phishingMeta: { matched?: boolean; pattern?: string; killed?: boolean } = {};
     if (url) {
       const phishingCheck = checkPhishingUrl(url);
-      if (phishingCheck.isPhishing) {
+      const hardPhish =
+        phishingCheck.isPhishing &&
+        (phishingCheck.isKilledBeforeGemini === true || phishingCheck.severity === 'HIGH');
+      if (hardPhish) {
         phishingMeta = {
           matched: true,
           pattern: phishingCheck.matchedPattern,
