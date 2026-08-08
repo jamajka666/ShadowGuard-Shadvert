@@ -130,22 +130,23 @@ export function decideFromFacts(bundle: FactBundle): RuleDecision {
     });
   }
 
+  // PROKAZANO_OFICIALNI is a strong FACT about domain identity — NOT proof that a
+  // specific ad/offer/seller is safe (PR #1 re-review). Marketplace listings on
+  // bazos.cz etc. can still contain courier/card scams. Until we have
+  // PROKAZANO_BEZPECNE evidence for the offer itself, do not emit DUVERYHODNE.
   if (bundle.knownOfficialHost && bundle.sslValid !== false) {
-    score += 15;
-    scoreBreakdown.push({ label: 'přesná shoda oficiální hostname', delta: 15 });
-    const trustScore = clampScore(score);
+    score += 12;
+    scoreBreakdown.push({ label: 'přesná shoda oficiální hostname (identita, ne bezpečnost nabídky)', delta: 12 });
     return {
-      internalVerdict: 'DUVERYHODNE',
-      safetyLevel: 'DUVERYHODNE',
-      trustScore,
+      internalVerdict: 'OPATRNOSTI',
+      safetyLevel: 'OPATRNOSTI',
+      trustScore: clampScore(score),
       signals,
       scoreBreakdown,
-      actionRecommendation: text.includes('osobn') || text.includes('bazar')
-        ? 'POUZE_OSOBNI_PREDANI'
-        : 'KOUPIT_BEZPECNE',
-      insufficientEvidence: false,
+      actionRecommendation: 'POUZE_OSOBNI_PREDANI',
+      insufficientEvidence: true,
       reasoningTrace:
-        'Verdikt DUVERYHODNE: přesná shoda se známou oficiální doménou + žádný potvrzený phishing. Stále doporučujeme běžnou obezřetnost u soukromých prodejců na bazarech.',
+        'Verdikt OPATRNOSTI: doména je na seznamu známých služeb (PROKAZANO_OFICIALNI), ale to neprokazuje bezpečnost konkrétní nabídky, prodejce ani obsahu. PROKAZANO_OFICIALNI ≠ PROKAZANO_BEZPECNE. NO_VERIFIED_THREAT_FOUND ≠ DUVERYHODNE.',
     };
   }
 
@@ -229,17 +230,28 @@ export function decideFromFacts(bundle: FactBundle): RuleDecision {
   };
 }
 
-/** Human templates when AI is rejected or unavailable — aligned with RuleDecision. */
-export function templatePresentation(decision: RuleDecision, hostname: string | null): {
+/**
+ * Server-owned presentation templates (headline/summary/advice).
+ * actionAdvice is NEVER invented by AI — fixed safe strings per verdict (PR #1 re-review).
+ */
+export function templatePresentation(
+  decision: RuleDecision,
+  hostname: string | null,
+  opts?: { phishingPattern?: string; knownOfficialHost?: boolean }
+): {
   headline: string;
   summaryForSenior: string;
   actionAdvice: string[];
 } {
   if (decision.safetyLevel === 'PODVOD') {
+    const pattern = opts?.phishingPattern;
     return {
-      headline: 'Zastavte se — vysoké riziko podvodu',
-      summaryForSenior:
-        'Podle ověřených znaků a našich pravidel jde o nebezpečnou nabídku. Neotvírejte podezřelé odkazy a nezadávejte údaje z platební karty.',
+      headline: pattern
+        ? `Zastavte se — odhalen nebezpečný odkaz (${pattern})`
+        : 'Zastavte se — vysoké riziko podvodu',
+      summaryForSenior: pattern
+        ? `Odkaz byl vyhodnocen jako nebezpečný podle naší ověřené databáze (${pattern}). Neotvírejte podezřelé odkazy a nezadávejte údaje z platební karty.`
+        : 'Podle ověřených znaků a našich pravidel jde o nebezpečnou nabídku. Neotvírejte podezřelé odkazy a nezadávejte údaje z platební karty.',
       actionAdvice: [
         'Nic neplaťte a nezadávejte číslo karty.',
         'Zavřete podezřelou stránku nebo zprávu.',
@@ -248,6 +260,18 @@ export function templatePresentation(decision: RuleDecision, hostname: string | 
     };
   }
   if (decision.insufficientEvidence || decision.internalVerdict === 'NEVIME') {
+    if (opts?.knownOfficialHost && hostname) {
+      return {
+        headline: `Známá doména (${hostname}) — nabídku stejně pečlivě prověřte`,
+        summaryForSenior:
+          `Adresa patří k dlouhodobě známé službě (${hostname}). To dokládá jen identitu domény, ne bezpečnost konkrétního inzerátu, prodejce ani zprávy. Doporučujeme zvýšenou opatrnost.`,
+        actionAdvice: [
+          'U bazaru trvejte na osobním předání a kontrole zboží.',
+          'Nereagujte na žádosti o platbu kartou mimo oficiální aplikaci.',
+          'Nikdy neotevírejte odkazy z SMS/WhatsAppu od neznámého kupujícího.',
+        ],
+      };
+    }
     return {
       headline: 'Nemáme dostatek ověřených údajů',
       summaryForSenior:
@@ -259,16 +283,15 @@ export function templatePresentation(decision: RuleDecision, hostname: string | 
       ],
     };
   }
+  // DUVERYHODNE reserved for future PROKAZANO_BEZPECNE evidence path
   if (decision.safetyLevel === 'DUVERYHODNE') {
     return {
-      headline: hostname
-        ? `Známá oficiální doména: ${hostname}`
-        : 'Známá oficiální doména',
+      headline: hostname ? `Silně podložená doména: ${hostname}` : 'Silně podložený výsledek',
       summaryForSenior:
-        'Odkaz směřuje na doménu ze seznamu dlouhodobě známých služeb. I tak buďte opatrní u soukromých prodejců a osobního předání.',
+        'Máme silné serverové důkazy pro tento verdikt. I tak zůstaňte opatrní u peněz a osobních údajů.',
       actionAdvice: [
-        'U bazaru trvejte na osobním předání a kontrole zboží.',
-        'Nereagujte na žádosti o platbu kartou mimo oficiální aplikaci.',
+        'Při nákupu používejte bezpečné platby a ověřené kanály.',
+        'Nereagujte na žádosti o kartu mimo oficiální aplikaci.',
       ],
     };
   }
@@ -282,4 +305,21 @@ export function templatePresentation(decision: RuleDecision, hostname: string | 
       'Když něco působí divně, raději nepokračujte.',
     ],
   };
+}
+
+/** Server-built list of things we explicitly did not verify (not AI prose). */
+export function buildUnverifiedClaims(factBundle: FactBundle): string[] {
+  const out: string[] = [];
+  if (factBundle.officialDomainStatus === 'NEOVERENO') {
+    out.push('Nepodařilo se ověřit, že jde o oficiální doménu ze známého seznamu.');
+  }
+  if (!factBundle.phishingMatched) {
+    out.push('Nenašli jsme shodu v interní phishing databázi — to neznamená, že nabídka je bezpečná.');
+  }
+  out.push('Cenu zboží jsme z serverových důkazů neověřili.');
+  out.push('Identitu prodejce / IČO / historii firmy jsme z serverových důkazů neověřili.');
+  if (factBundle.hasImage) {
+    out.push('Přiložený snímek jsme neinterpretovali jako důkaz o firmě ani e-shopu.');
+  }
+  return out;
 }

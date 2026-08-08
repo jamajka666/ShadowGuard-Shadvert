@@ -12,7 +12,7 @@ import dotenv from 'dotenv';
 import { checkPhishingUrl } from './src/utils/phishingValidator';
 import { assertSafePublicHost } from './src/utils/ssrfGuard';
 import { buildFactBundle } from './src/trust/facts';
-import { decideFromFacts, templatePresentation } from './src/trust/ruleEngine';
+import { decideFromFacts } from './src/trust/ruleEngine';
 import { validateAiPresentation } from './src/trust/aiOutputValidator';
 import {
   buildAnalyzeSystemInstruction,
@@ -943,6 +943,7 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
         };
       }
       if (phishingCheck.isPhishing && phishingCheck.isKilledBeforeGemini) {
+        // Canonical path only: FACTS → Rule Engine → mergeResult (no ad-hoc enriched claims)
         console.log(
           `[URL Validator] Phishing kill before Gemini: ${url} (${phishingCheck.matchedPattern})`
         );
@@ -954,44 +955,8 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
           sslDomainInfo,
           phishingMeta
         );
-        // Prefer explicit phishing copy when kill-switch fires
-        const tpl = templatePresentation(
-          decideFromFacts(
-            buildFactBundle({
-              url,
-              rawText,
-              userNote,
-              hasImage,
-              sslDomainInfo,
-              phishingMatched: true,
-              phishingPattern: phishingCheck.matchedPattern,
-              phishingKilled: true,
-            })
-          ),
-          phishingCheck.domainName || null
-        );
-        const enriched = {
-          ...phishResult,
-          headline: `Zastavte se — odhalen nebezpečný odkaz (${phishingCheck.matchedPattern || 'phishing'})`,
-          summaryForSenior: `Odkaz byl vyhodnocen jako nebezpečný podle naší ověřené databáze ještě před další analýzou. ${phishingCheck.reason || ''} ${tpl.summaryForSenior}`,
-          riskFactors: [
-            {
-              id: 'rf-phish-1',
-              severity: 'VYSOKE',
-              title: `Phishingová shoda: ${phishingCheck.matchedPattern || 'Nebezpečný odkaz'}`,
-              description:
-                phishingCheck.reason ||
-                'Doména je v interní databázi nebezpečných vzorů (prokázaný důkaz).',
-            },
-          ],
-          urlAnalysis: {
-            ...(phishResult as any).urlAnalysis,
-            domainName: phishingCheck.domainName || (phishResult as any).urlAnalysis?.domainName,
-            domainWarning: `DETEKOVÁN PHISHING: ${phishingCheck.reason || 'shoda v databázi'}`,
-          },
-        };
-        setCachedVerdict(cacheKey, enriched);
-        return res.json(enriched);
+        setCachedVerdict(cacheKey, phishResult);
+        return res.json(phishResult);
       }
     }
 
@@ -1063,19 +1028,8 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
             responseSchema: {
               type: Type.OBJECT,
               properties: schemaProps as any,
-              required: [
-                'safetyLevel',
-                'trustScore',
-                'headline',
-                'summaryForSenior',
-                'actionRecommendation',
-                'actionAdvice',
-                'riskFactors',
-                'positiveFactors',
-                'sellerChecks',
-                'urlAnalysis',
-                'priceEvaluation',
-              ],
+              // Presentation only — structured claims / actionAdvice are server-owned
+              required: ['safetyLevel', 'trustScore', 'headline', 'summaryForSenior'],
             },
           },
         });

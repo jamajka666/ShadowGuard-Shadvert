@@ -1,14 +1,14 @@
 /**
  * Merge Rule Engine decision + optional validated AI presentation into AdCheckResult shape.
  *
- * PR #1 P0: free-form AI claim arrays are NOT trusted as facts.
- * Server rebuilds riskFactors / positiveFactors / sellerChecks / trustedAlternatives
- * from FACTS + Rule Engine only. AI may only supply presentation copy (headline, summary, advice).
+ * Canonical path only: FACTS → Rule Engine → mergeResult → USER.
+ * AI may only supply headline + summaryForSenior after validation.
+ * actionAdvice, claims, alternatives, unverifiedClaims = server-owned.
  */
 
 import type { FactBundle } from './facts';
 import type { RuleDecision } from './ruleEngine';
-import { templatePresentation } from './ruleEngine';
+import { buildUnverifiedClaims, templatePresentation } from './ruleEngine';
 import type { AiPresentationPayload } from './aiOutputValidator';
 import { GENERAL_KNOWN_SERVICE_TIPS } from './truthContract';
 
@@ -78,7 +78,7 @@ function buildPositiveFactorsFromFacts(factBundle: FactBundle) {
       id: f?.factId || 'pf-official',
       title: 'Hostname je na seznamu dlouhodobě známých služeb',
       description:
-        'Přesná shoda s interním seznamem. Neznamená to automaticky, že konkrétní prodejce nebo inzerát je bez rizika.',
+        'PROKAZANO_OFICIALNI = identita domény. Není to důkaz, že konkrétní inzerát, prodejce nebo zpráva je bezpečná.',
       factIds: f ? [f.factId] : [],
       claimSource: 'server_fact',
     });
@@ -89,7 +89,7 @@ function buildPositiveFactorsFromFacts(factBundle: FactBundle) {
     out.push({
       id: f?.factId || 'pf-tls',
       title: 'TLS/SSL certifikát je podle měření platný',
-      description: 'Technický fakt o šifrování spojení — ne důkaz důvěryhodnosti obchodu.',
+      description: 'Technický fakt o šifrování spojení — ne důkaz důvěryhodnosti obchodu ani nabídky.',
       factIds: f ? [f.factId] : [],
       claimSource: 'server_fact',
     });
@@ -98,7 +98,6 @@ function buildPositiveFactorsFromFacts(factBundle: FactBundle) {
   return out;
 }
 
-/** General known services — explicitly NOT a security verdict for this offer. */
 export function generalKnownServiceTips() {
   return GENERAL_KNOWN_SERVICE_TIPS.map((t) => ({
     ...t,
@@ -119,22 +118,21 @@ export function mergeAnalysisResult(opts: {
   rulesVersion: string;
 }): Record<string, unknown> {
   const { factBundle, decision, ai, aiAccepted, url, rawText } = opts;
-  const tpl = templatePresentation(decision, factBundle.hostname);
+  const tpl = templatePresentation(decision, factBundle.hostname, {
+    phishingPattern: factBundle.phishingPattern,
+    knownOfficialHost: factBundle.knownOfficialHost,
+  });
 
+  // AI: only headline + summary after validator pass (never actionAdvice / claims)
   const useAi = aiAccepted && ai;
   const headline = useAi && ai.headline ? String(ai.headline) : tpl.headline;
   const summaryForSenior =
     useAi && ai.summaryForSenior ? String(ai.summaryForSenior) : tpl.summaryForSenior;
-  const actionAdvice =
-    useAi && Array.isArray(ai.actionAdvice) && ai.actionAdvice.length > 0
-      ? (ai.actionAdvice as string[])
-      : tpl.actionAdvice;
+  const actionAdvice = tpl.actionAdvice;
 
-  // P0: structured claims ONLY from server FACTS + Rule Engine
   const riskFactors = buildRiskFactorsFromEngine(decision, factBundle);
   const positiveFactors = buildPositiveFactorsFromFacts(factBundle);
-  const sellerChecks: string[] = []; // never invent seller checks without evidence module
-
+  const sellerChecks: string[] = [];
   const isOfficial = factBundle.officialDomainStatus === 'PROKAZANO_OFICIALNI';
 
   const groundingCandidates = (opts.groundingSources || []).map((g) => ({
@@ -143,6 +141,17 @@ export function mergeAnalysisResult(opts: {
     role: 'grounding_candidate' as const,
     note: 'Kandidát na kontrolu — NENÍ automaticky ověřený důkaz serveru.',
   }));
+
+  const domainWarning =
+    decision.safetyLevel === 'PODVOD'
+      ? factBundle.phishingMatched
+        ? `DETEKOVÁN PHISHING: ${factBundle.phishingPattern || 'shoda v databázi'}`
+        : 'Tato doména nebo nabídka je podle ověřených znaků nebezpečná.'
+      : factBundle.officialDomainStatus === 'NEOVERENO'
+        ? 'Nepodařilo se ověřit, že jde o oficiální doménu.'
+        : factBundle.knownOfficialHost
+          ? 'Doména je známá, ale konkrétní nabídka není prokázána jako bezpečná.'
+          : undefined;
 
   return {
     id: 'res-' + Date.now(),
@@ -162,33 +171,24 @@ export function mergeAnalysisResult(opts: {
       domainName: factBundle.hostname || '—',
       isOfficialDomain: isOfficial,
       officialDomainStatus: factBundle.officialDomainStatus,
-      domainWarning:
-        decision.safetyLevel === 'PODVOD'
-          ? 'Tato doména nebo nabídka je podle ověřených znaků nebezpečná.'
-          : factBundle.officialDomainStatus === 'NEOVERENO'
-            ? 'Nepodařilo se ověřit, že jde o oficiální doménu.'
-            : undefined,
+      domainWarning,
     },
     priceEvaluation: {
       isPriceSuspicious: decision.safetyLevel === 'PODVOD',
-      // Never take invented market price from AI into user payload
       priceComment: 'Cenu se nepodařilo ověřit z dostupných serverových důkazů.',
       estimatedMarketPrice: undefined,
-      suggestedSearchTerm:
-        useAi && ai.priceEvaluation?.suggestedSearchTerm
-          ? String(ai.priceEvaluation.suggestedSearchTerm).slice(0, 80)
-          : undefined,
+      suggestedSearchTerm: undefined,
     },
     eshopVisualAnalysis: {
-      // Visual claims from AI are not server-verified evidence — keep minimal
-      isEshopDetected: Boolean(factBundle.hasImage),
+      visualInputPresent: Boolean(factBundle.hasImage),
+      // Do not claim e-shop detection from mere image presence
+      isEshopDetected: false,
       designComment: factBundle.hasImage
-        ? 'Snímek byl přiložen. Vizuální „důvěryhodnost“ bez samostatného měření neprohlašujeme za ověřený fakt.'
+        ? 'Byl přiložen vizuální vstup. Neprohlašujeme, že jde o e-shop, ani vizuální důvěryhodnost jako ověřený fakt.'
         : undefined,
     },
     trustedAlternatives: generalKnownServiceTips(),
     sslDomainInfo: opts.sslDomainInfo,
-    // P1: grounding ≠ evidence
     groundingSources: groundingCandidates.length > 0 ? groundingCandidates : undefined,
     groundingIsNotEvidence: true,
     groundingNote:
@@ -202,14 +202,14 @@ export function mergeAnalysisResult(opts: {
       derivedFromFactIds: f.derivedFromFactIds,
     })),
     evidence: factBundle.evidence,
-    unverifiedClaims: useAi && Array.isArray(ai.unverifiedClaims) ? ai.unverifiedClaims : [],
+    unverifiedClaims: buildUnverifiedClaims(factBundle),
     reasoningTrace: decision.reasoningTrace,
     scoreBreakdown: decision.scoreBreakdown,
     internalVerdict: decision.internalVerdict,
     threatFinding: factBundle.threatFinding,
     trustScoreLabel: 'Interní skóre podle našich pravidel (ne procento bezpečnosti)',
     claimsPolicy:
-      'User-facing structured claims (risk/positive/seller/alternatives) are server-built from FACTS+rules only. AI may only phrase headline/summary/advice.',
+      'Structured claims + actionAdvice are server-built from FACTS+rules only. AI may only phrase headline/summary after validation. PROKAZANO_OFICIALNI ≠ PROKAZANO_BEZPECNE.',
     isFallback: !useAi,
     rulesVersion: opts.rulesVersion,
     verdictSource: opts.verdictSource,

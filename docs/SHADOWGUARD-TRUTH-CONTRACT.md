@@ -25,12 +25,13 @@ Guarantee: **100% claim traceability** relative to listed evidence — not absol
 
 `src/trust/aiOutputValidator.ts` — on FAIL, user sees hybrid/template text (`verdictSource: ai_rejected`), never the invalid AI claims.
 
-### P0 claim policy (PR #1 review)
+### P0 claim policy (PR #1 re-review)
 
 - Banlist ≠ claim integrity. Invented “IČO / ověřený obchod / dlouhá historie” also FAIL.
-- Structured user-facing claims (`riskFactors`, `positiveFactors`, `sellerChecks`, `trustedAlternatives`) are **server-built** from FACTS + Rule Engine (`mergeResult.ts`).
-- AI may only phrase `headline` / `summaryForSenior` / `actionAdvice` after validation.
-- If AI emits claim arrays, each item must bind `factIds[]` to server FACTS — otherwise reject.
+- Structured claims + **`actionAdvice`** + **`unverifiedClaims`** are **server-built** only.
+- AI may only phrase **`headline` / `summaryForSenior`** (schema has no claim arrays).
+- **Canonical path only:** FACTS → Rule Engine → `mergeAnalysisResult` → USER (including phishing kill).
+- **PROKAZANO_OFICIALNI ≠ PROKAZANO_BEZPECNE** — known host alone never yields `DUVERYHODNE`.
 
 ### Grounding
 

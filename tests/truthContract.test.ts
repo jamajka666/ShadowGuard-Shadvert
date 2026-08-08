@@ -109,15 +109,30 @@ describe('Rule Engine — hard evidence', () => {
     assert.equal(d.actionRecommendation, 'NEKUPOVAT_NEPLATIT');
   });
 
-  it('known official host can be DUVERYHODNE', () => {
+  it('known official host is PROKAZANO_OFICIALNI but NOT auto DUVERYHODNE', () => {
     const facts = buildFactBundle({
       url: 'https://www.bazos.cz/inzerat/123',
       rawText: 'Prodám kolo, osobní předání',
       sslDomainInfo: { domain: 'www.bazos.cz', isSslValid: true, domainAgeYears: 20 },
     });
     const d = decideFromFacts(facts);
-    assert.equal(d.safetyLevel, 'DUVERYHODNE');
     assert.equal(facts.officialDomainStatus, 'PROKAZANO_OFICIALNI');
+    assert.equal(d.safetyLevel, 'OPATRNOSTI');
+    assert.notEqual(d.safetyLevel, 'DUVERYHODNE');
+    assert.match(d.reasoningTrace, /PROKAZANO_OFICIALNI|neprokazuje|≠/i);
+  });
+
+  it('adversarial: official domain + scam content → PODVOD never DUVERYHODNE', () => {
+    const facts = buildFactBundle({
+      url: 'https://www.bazos.cz/inzerat/999',
+      rawText:
+        'Kurýr vám pošle odkaz. Pro potvrzení přijetí zadejte číslo karty na platební stránce.',
+      sslDomainInfo: { domain: 'www.bazos.cz', isSslValid: true, domainAgeYears: 20 },
+    });
+    const d = decideFromFacts(facts);
+    assert.equal(facts.officialDomainStatus, 'PROKAZANO_OFICIALNI');
+    assert.equal(d.safetyLevel, 'PODVOD');
+    assert.notEqual(d.safetyLevel, 'DUVERYHODNE');
   });
 
   it('insufficient data yields NEVIME (UI OPATRNOSTI)', () => {
@@ -169,7 +184,6 @@ describe('AI Output Validator kill switch', () => {
       {
         headline: 'Test',
         summaryForSenior: 'Toto pravděpodobně bude v pořádku pro nákup.',
-        actionAdvice: ['Buďte opatrní'],
       },
       baseDecision,
       'NEOVERENO'
@@ -178,28 +192,17 @@ describe('AI Output Validator kill switch', () => {
     if (!v.ok) assert.ok(v.reasons.some((r) => r.includes('forbidden')));
   });
 
-  /** Adversarial: exact user-facing phrases that must never pass validator (ChatGPT gate). */
   it('adversarial: rejects common false-confidence AI lines', () => {
     const attacks = [
       'Tento web je pravděpodobně bezpečný.',
       'Doména je pravděpodobně oficiální.',
       'Vypadá to jako oficiální obchod.',
-      'Obchod je almost certainly legitimní — wait, je téměř jistě legitimní.',
+      'Tento obchod je pravděpodobně bezpečný pro nákup.',
       'Je téměř jistě legitimní e-shop.',
     ];
     for (const summaryForSenior of attacks) {
-      // "téměř jistě" is not in banlist yet — add via "vypadá" / "pravděpodobně" cases first
-      const text = summaryForSenior.includes('téměř jistě')
-        ? summaryForSenior.replace('téměř jistě', 'pravděpodobně')
-        : summaryForSenior;
       const v = validateAiPresentation(
-        {
-          headline: 'OK',
-          summaryForSenior: text.includes('almost certainly')
-            ? 'Tento obchod je pravděpodobně bezpečný pro nákup.'
-            : text,
-          actionAdvice: ['Pokračujte'],
-        },
+        { headline: 'OK', summaryForSenior },
         baseDecision,
         'NEOVERENO'
       );
@@ -212,7 +215,6 @@ describe('AI Output Validator kill switch', () => {
       {
         headline: 'Oficiální obchod',
         summaryForSenior: 'Jedná se o oficiální obchod společnosti X s plnou důvěrou.',
-        actionAdvice: ['Můžete pokračovat'],
         urlAnalysis: { isOfficialDomain: true, officialDomainStatus: 'PROKAZANO_OFICIALNI' },
       },
       baseDecision,
@@ -229,7 +231,6 @@ describe('AI Output Validator kill switch', () => {
       {
         headline: 'OK',
         summaryForSenior: 'Podle dostupných údajů není důvod k panice.',
-        actionAdvice: ['Pokračujte opatrně'],
         safetyLevel: 'DUVERYHODNE',
       },
       podvod,
@@ -239,22 +240,12 @@ describe('AI Output Validator kill switch', () => {
     if (!v.ok) assert.ok(v.reasons.some((r) => r.includes('soften')));
   });
 
-  it('accepts clean presentation', () => {
+  it('accepts clean presentation (headline+summary only)', () => {
     const v = validateAiPresentation(
       {
         headline: 'Vyžaduje opatrnost',
         summaryForSenior:
           'Nemáme dostatek ověřených údajů o prodejci. Doporučujeme osobní předání a neplatit předem.',
-        actionAdvice: ['Nic neplaťte předem', 'Ověřte kontakt'],
-        urlAnalysis: {
-          domainName: 'example.com',
-          isOfficialDomain: false,
-          officialDomainStatus: 'NEOVERENO',
-        },
-        priceEvaluation: {
-          isPriceSuspicious: false,
-          priceComment: 'Cenu se nepodařilo ověřit',
-        },
       },
       baseDecision,
       'NEOVERENO'
@@ -262,7 +253,7 @@ describe('AI Output Validator kill switch', () => {
     assert.equal(v.ok, true);
   });
 
-  it('P0: rejects invented world-claims without "pravděpodobně" (IČO / ověřený obchod)', () => {
+  it('P0: rejects invented world-claims without "pravděpodobně"', () => {
     const cases = [
       'Prodejce má uvedené IČO a je v pořádku.',
       'Obchod má dlouhou historii a tisíce spokojených zákazníků.',
@@ -270,11 +261,7 @@ describe('AI Output Validator kill switch', () => {
     ];
     for (const summaryForSenior of cases) {
       const v = validateAiPresentation(
-        {
-          headline: 'OK',
-          summaryForSenior,
-          actionAdvice: ['Pokračujte'],
-        },
+        { headline: 'OK', summaryForSenior },
         baseDecision,
         'NEOVERENO'
       );
@@ -282,43 +269,34 @@ describe('AI Output Validator kill switch', () => {
     }
   });
 
-  it('P0: rejects positiveFactors without factIds', () => {
-    const facts = buildFactBundle({
-      url: 'https://example.com',
-      sslDomainInfo: { domain: 'example.com', isSslValid: true },
-    });
-    const d = decideFromFacts(facts);
+  it('P0: rejects AI-supplied actionAdvice / structured claims', () => {
     const v = validateAiPresentation(
       {
         headline: 'Shrnutí',
         summaryForSenior: 'Nemáme dostatek ověřených údajů pro silné tvrzení.',
         actionAdvice: ['Buďte opatrní'],
-        positiveFactors: [{ id: 'x', title: 'Dlouhá historie', description: 'Obchod funguje roky' }],
+        positiveFactors: [{ id: 'x', title: 'X', description: 'Y' }],
       },
-      d,
-      facts.officialDomainStatus,
-      facts
+      baseDecision,
+      'NEOVERENO'
     );
     assert.equal(v.ok, false);
-    if (!v.ok) assert.ok(v.reasons.some((r) => r.includes('factIds')));
+    if (!v.ok) {
+      assert.ok(v.reasons.some((r) => /actionAdvice|positiveFactors/i.test(r)));
+    }
   });
 
-  it('adversarial: rejected AI must not be treated as pass (kill switch semantics)', () => {
+  it('adversarial: rejected AI must not be treated as pass', () => {
     const v = validateAiPresentation(
       {
         headline: 'Bezpečné',
         summaryForSenior: 'Obchod vypadá to jako oficiální a je pravděpodobně bezpečný.',
-        actionAdvice: ['Kupte'],
         safetyLevel: 'DUVERYHODNE',
       },
       baseDecision,
       'NEOVERENO'
     );
     assert.equal(v.ok, false);
-    // Server maps this to verdictSource ai_rejected + template; never show AI claims
-    if (!v.ok) {
-      assert.ok(v.reasons.length >= 1);
-    }
   });
 });
 
@@ -342,7 +320,7 @@ describe('P1 derived facts + server-owned claims', () => {
     assert.deepEqual(age!.derivedFromFactIds, [creation!.factId]);
   });
 
-  it('mergeResult never passes AI positiveFactors inventing world-claims', () => {
+  it('mergeResult never passes AI claims; actionAdvice is server template', () => {
     const facts = buildFactBundle({
       url: 'https://www.bazos.cz/x',
       rawText: 'kolo',
@@ -356,25 +334,58 @@ describe('P1 derived facts + server-owned claims', () => {
       ai: {
         headline: 'OK',
         summaryForSenior: 'Známá doména ze seznamu. Buďte opatrní u soukromého prodejce.',
-        actionAdvice: ['Osobní předání'],
+        actionAdvice: ['AI vymyšlená rada s IČO'],
         positiveFactors: [
           { id: 'lie', title: 'IČO', description: 'Prodejce má IČO a dlouhou historii' },
         ],
         sellerChecks: ['Prodejce má IČO'],
+        unverifiedClaims: ['AI tvrdí že firma nemá dluhy — neověřeno'],
       },
       aiAccepted: true,
       verdictSource: 'ai',
       rulesVersion: 'test',
     });
+    assert.equal(decision.safetyLevel, 'OPATRNOSTI');
     const positives = merged.positiveFactors as { description?: string; title?: string }[];
     const seller = merged.sellerChecks as string[];
+    const advice = merged.actionAdvice as string[];
     assert.ok(Array.isArray(positives));
     assert.ok(!positives.some((p) => /i[cč]o|dlouhou/i.test(String(p.description) + String(p.title))));
     assert.equal(seller.length, 0);
+    assert.ok(!advice.some((a) => /AI vymyšlen|i[cč]o/i.test(a)));
+    assert.ok(advice.length >= 1);
     assert.equal(merged.groundingIsNotEvidence, true);
+    const unverified = merged.unverifiedClaims as string[];
+    assert.ok(unverified.every((u) => !/dluhy/i.test(u)));
+    assert.ok(unverified.some((u) => /IČO|prodejce/i.test(u)));
     const alts = merged.trustedAlternatives as { badge?: string; claimStatus?: string }[];
     assert.ok(alts.every((a) => a.claimStatus === 'GENERAL_KNOWN_SERVICE_NOT_VERDICT'));
-    assert.ok(alts.every((a) => /ne ověření/i.test(String(a.badge))));
+    const visual = merged.eshopVisualAnalysis as { isEshopDetected?: boolean; visualInputPresent?: boolean };
+    assert.equal(visual.isEshopDetected, false);
+  });
+
+  it('mergeResult phishing path uses server riskFactors with factIds', () => {
+    const facts = buildFactBundle({
+      url: 'https://zasilkovna-platba-cz.online/pay',
+      phishingMatched: true,
+      phishingKilled: true,
+      phishingPattern: 'Falešná Zásilkovna',
+    });
+    const decision = decideFromFacts(facts);
+    const merged = mergeAnalysisResult({
+      factBundle: facts,
+      decision,
+      ai: null,
+      aiAccepted: false,
+      verdictSource: 'phishing_kill',
+      rulesVersion: 'test',
+    });
+    assert.equal(merged.safetyLevel, 'PODVOD');
+    assert.equal(merged.verdictSource, 'phishing_kill');
+    const risks = merged.riskFactors as { factIds?: string[]; claimSource?: string }[];
+    assert.ok(risks.length >= 1);
+    assert.ok(risks.some((r) => r.claimSource === 'server_fact' || r.claimSource === 'rule_engine'));
+    assert.match(String(merged.headline), /nebezpečn|Zastavte/i);
   });
 
   it('generalKnownServiceTips are not security verdicts', () => {
