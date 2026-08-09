@@ -45,13 +45,29 @@ export interface SSLDomainInfo {
   error?: string;
 }
 
+export type OfficialDomainStatus =
+  | 'PROKAZANO_OFICIALNI'
+  | 'PROKAZANO_NEOFICIALNI'
+  | 'NEOVERENO';
+
+export type VerificationStatus = 'VERIFIED' | 'DERIVED' | 'UNVERIFIED';
+
+export interface EvidenceFact {
+  factId?: string;
+  fact: string;
+  source: string;
+  verificationStatus: VerificationStatus;
+}
+
 export interface AdCheckResult {
   id: string;
   timestamp: number;
   inputUrl?: string;
   inputSnippet?: string;
   safetyLevel: SafetyLevel;
-  trustScore: number; // 0 to 100
+  /** Internal score by our rules — NOT “percent safe” (SGW-008). */
+  trustScore: number;
+  trustScoreLabel?: string;
   headline: string;
   summaryForSenior: string;
   actionRecommendation: 'KOUPIT_BEZPECNE' | 'POUZE_OSOBNI_PREDANI' | 'NEKUPOVAT_NEPLATIT';
@@ -62,10 +78,12 @@ export interface AdCheckResult {
   urlAnalysis: {
     domainName: string;
     isOfficialDomain: boolean;
+    officialDomainStatus?: OfficialDomainStatus;
     domainWarning?: string;
   };
   priceEvaluation: {
-    isPriceSuspicious: boolean;
+    /** Only true with dedicated price evidence; omit/undefined if not evaluated. */
+    isPriceSuspicious?: boolean;
     priceComment: string;
     estimatedMarketPrice?: string;
     suggestedSearchTerm?: string;
@@ -80,12 +98,45 @@ export interface AdCheckResult {
   sslDomainInfo?: SSLDomainInfo;
   trustedAlternatives?: TrustedAlternative[];
   groundingSources?: { title: string; url: string }[];
+  evidenceFacts?: EvidenceFact[];
+  unverifiedClaims?: string[];
+  /** Expandable "Proč?" panel — answers why we cannot claim more (Trust UX). */
+  whyPanel?: {
+    show: boolean;
+    title: string;
+    lead: string;
+    doesNotMean: string;
+    checks: {
+      id: string;
+      label: string;
+      icon: string;
+      status: 'OVERENO' | 'NALEZENO' | 'NEOVERENO' | 'SELHALO' | 'SIGNAL' | 'NEPROVEDENO';
+      statusLabel?: string;
+      meaning: string;
+      kind: string;
+    }[];
+    recommendations: string[];
+    primaryKind: string;
+    structure: {
+      verified: string[];
+      notVerified: string[];
+      whyBlocksStrongerVerdict: string;
+      doesNotMean: string;
+      recommend: string[];
+    };
+  };
+  noVerdictIsNotNoHelp?: boolean;
+  reasoningTrace?: string;
+  scoreBreakdown?: { label: string; delta: number }[];
+  internalVerdict?: 'DUVERYHODNE' | 'OPATRNOSTI' | 'PODVOD' | 'NEVIME';
+  threatFinding?: 'CONFIRMED_THREAT' | 'NO_VERIFIED_THREAT_FOUND' | 'UNKNOWN';
   category?: string;
   isFallback?: boolean;
+  aiRejectReasons?: string[];
   /** Hybrid rules version — same input + same rulesVersion should yield stable safetyLevel for rule path */
   rulesVersion?: string;
   /** How the verdict was produced */
-  verdictSource?: 'phishing_kill' | 'hybrid_rules' | 'ai' | 'cache';
+  verdictSource?: 'phishing_kill' | 'hybrid_rules' | 'ai' | 'ai_rejected' | 'cache';
   cached?: boolean;
 }
 

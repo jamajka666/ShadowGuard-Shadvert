@@ -31,6 +31,7 @@ import { EshopVisualTrustCard } from './EshopVisualTrustCard';
 import { SslDomainCard } from './SslDomainCard';
 import { TrustScoreGauge } from './TrustScoreGauge';
 import { EnergyAuraVisualizer } from './EnergyAuraVisualizer';
+import { WhyPanelCard } from './WhyPanelCard';
 import { UserCheck, Shield, FileCode, Terminal, AlertOctagon, CheckSquare, Layers, Download } from 'lucide-react';
 
 interface ResultDisplayProps {
@@ -389,14 +390,20 @@ ${result.inputUrl ? `Odkaz: ${result.inputUrl}` : ''}`;
 
           <div className="text-right">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-              Skóre důvěryhodnosti:
+              Skóre podle našich pravidel:
             </span>
             <span className={`text-2xl font-black ${isScam ? 'text-rose-500' : isCaution ? 'text-amber-400' : 'text-emerald-400'}`}>
               {result.trustScore} / 100
             </span>
+            <span className="block text-[10px] opacity-70 font-normal mt-0.5 max-w-[12rem] ml-auto leading-tight">
+              {result.trustScoreLabel || 'Nejde o procento bezpečnosti'}
+            </span>
           </div>
         </div>
       </div>
+
+      {/* Trust UX: "A proč?" — NO-VERDICT ≠ NO-HELP */}
+      <WhyPanelCard result={result} fontSize={fontSize} />
 
       {/* E-SHOP VISUAL TRUST ANALYSIS (WHEN SCREENSHOT ANALYZED) */}
       <EshopVisualTrustCard

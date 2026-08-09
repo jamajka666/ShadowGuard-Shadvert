@@ -11,6 +11,18 @@ import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import { checkPhishingUrl } from './src/utils/phishingValidator';
 import { assertSafePublicHost } from './src/utils/ssrfGuard';
+import { buildFactBundle } from './src/trust/facts';
+import { decideFromFacts } from './src/trust/ruleEngine';
+import { validateAiPresentation } from './src/trust/aiOutputValidator';
+import {
+  buildAnalyzeSystemInstruction,
+  buildAnalyzeUserPrompt,
+  buildScamAlertsSystemInstruction,
+  buildScamAlertsUserPrompt,
+  analyzeResponseSchemaProperties,
+} from './src/trust/aiPresentation';
+import { mergeAnalysisResult } from './src/trust/mergeResult';
+import { RULES_VERSION_TRUTH } from './src/trust/truthContract';
 
 // Load .env then .env.local (local overrides), but never clobber NODE_ENV from the shell
 const shellNodeEnv = process.env.NODE_ENV;
@@ -26,7 +38,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
 const APP_VERSION = process.env.APP_VERSION || '1.0.0';
 /** Bump when hybrid rules / kill-switch / fallback thresholds change (Trust Engine). */
-const RULES_VERSION = process.env.RULES_VERSION || 'rules-2026-08-06';
+const RULES_VERSION = process.env.RULES_VERSION || RULES_VERSION_TRUTH;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const FAMILY_CODE = process.env.FAMILY_CODE || '';
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -69,7 +81,7 @@ function setCachedVerdict(key: string, payload: unknown) {
 
 function withTrustMeta(
   result: Record<string, unknown>,
-  source: 'phishing_kill' | 'hybrid_rules' | 'ai' | 'cache',
+  source: 'phishing_kill' | 'hybrid_rules' | 'ai' | 'ai_rejected' | 'cache',
   cached = false
 ) {
   return {
@@ -128,6 +140,69 @@ const heavyLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Příliš mnoho kontrol najednou. Počkejte chvíli a zkuste znovu.' },
 });
+/** FAM-001 interim: stricter limit on family write endpoints (brute-force FAMILY_CODE). */
+const familyWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_FAMILY_WRITE_MAX) || 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Příliš mnoho pokusů o rodinný přístup. Počkejte chvíli a zkuste znovu.' },
+});
+/** Failed FAMILY_CODE attempts → temporary lockout per IP (in-memory). */
+const familyAuthFails = new Map<string, { count: number; lockedUntil: number }>();
+const FAMILY_FAIL_MAX = Number(process.env.FAMILY_FAIL_MAX) || 12;
+const FAMILY_LOCKOUT_MS = Number(process.env.FAMILY_LOCKOUT_MS) || 15 * 60 * 1000;
+
+/**
+ * Client IP for FAMILY fail lockout.
+ * P1 (PR #1): X-Forwarded-For is client-spoofable unless we trust a reverse proxy.
+ * Only honor XFF when TRUST_PROXY=1 (e.g. Cloudflare Tunnel → localhost with trusted hop).
+ * Default: socket remoteAddress only.
+ */
+const TRUST_PROXY =
+  process.env.TRUST_PROXY === '1' || String(process.env.TRUST_PROXY || '').toLowerCase() === 'true';
+
+function clientIp(req: express.Request): string {
+  if (TRUST_PROXY) {
+    const xf = req.headers['x-forwarded-for'];
+    if (typeof xf === 'string' && xf.length) {
+      // Left-most = original client when proxy appends; only use when proxy is trusted
+      return xf.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+    }
+    const realIp = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'];
+    if (typeof realIp === 'string' && realIp.trim()) return realIp.trim();
+  }
+  return req.socket.remoteAddress || 'unknown';
+}
+
+function familyAuthAllowed(req: express.Request, res: express.Response): boolean {
+  const ip = clientIp(req);
+  const row = familyAuthFails.get(ip);
+  if (row && row.lockedUntil > Date.now()) {
+    res.status(429).json({
+      error: 'Dočasný zámek po opakovaných neplatných rodinných kódech. Zkuste to později.',
+    });
+    return false;
+  }
+  return true;
+}
+
+function noteFamilyAuthResult(req: express.Request, ok: boolean) {
+  const ip = clientIp(req);
+  if (ok) {
+    familyAuthFails.delete(ip);
+    return;
+  }
+  const row = familyAuthFails.get(ip) || { count: 0, lockedUntil: 0 };
+  row.count += 1;
+  if (row.count >= FAMILY_FAIL_MAX) {
+    row.lockedUntil = Date.now() + FAMILY_LOCKOUT_MS;
+    row.count = 0;
+    console.warn(`[family] lockout IP=${ip} for ${FAMILY_LOCKOUT_MS}ms`);
+  }
+  familyAuthFails.set(ip, row);
+}
+
 app.use('/api/', apiLimiter);
 
 // --- Family / remote management store ---
@@ -249,7 +324,7 @@ app.get('/api/family/config', (_req, res) => {
   });
 });
 
-app.post('/api/family/heartbeat', (req, res) => {
+app.post('/api/family/heartbeat', familyWriteLimiter, (req, res) => {
   const { deviceId, label, appVersion, userAgent, familyCode } = req.body || {};
   if (!deviceId || typeof deviceId !== 'string') {
     return res.status(400).json({ error: 'Chybí deviceId' });
@@ -258,9 +333,12 @@ app.post('/api/family/heartbeat', (req, res) => {
   if (!FAMILY_CODE) {
     return res.status(503).json({ error: 'Rodinný sync není na serveru nakonfigurován' });
   }
+  if (!familyAuthAllowed(req, res)) return;
   if (!familyCodeOk(familyCode)) {
+    noteFamilyAuthResult(req, false);
     return res.status(403).json({ error: 'Neplatný rodinný kód' });
   }
+  noteFamilyAuthResult(req, true);
   const db = loadFamilyDb();
   db.devices[deviceId] = {
     deviceId,
@@ -273,15 +351,18 @@ app.post('/api/family/heartbeat', (req, res) => {
   res.json({ ok: true, serverTime: Date.now() });
 });
 
-app.post('/api/family/history', (req, res) => {
+app.post('/api/family/history', familyWriteLimiter, (req, res) => {
   const { familyCode, deviceId, deviceLabel, item } = req.body || {};
   // D-P2-3: align with heartbeat — missing config vs invalid code
   if (!FAMILY_CODE) {
     return res.status(503).json({ error: 'Rodinný sync není na serveru nakonfigurován' });
   }
+  if (!familyAuthAllowed(req, res)) return;
   if (!familyCodeOk(familyCode)) {
+    noteFamilyAuthResult(req, false);
     return res.status(403).json({ error: 'Neplatný rodinný kód' });
   }
+  noteFamilyAuthResult(req, true);
   if (!item || !deviceId) {
     return res.status(400).json({ error: 'Chybí data' });
   }
@@ -338,14 +419,17 @@ app.get('/api/family/devices', (req, res) => {
 });
 
 /** Save export file into data/exports on Lenovo (family-auth, not public dump). */
-app.post('/api/family/save-export', (req, res) => {
+app.post('/api/family/save-export', familyWriteLimiter, (req, res) => {
   const { familyCode, deviceId, deviceLabel, fileName, contentBase64 } = req.body || {};
   if (!FAMILY_CODE) {
     return res.status(503).json({ error: 'Rodinný sync není na serveru nakonfigurován' });
   }
+  if (!familyAuthAllowed(req, res)) return;
   if (!familyCodeOk(familyCode)) {
+    noteFamilyAuthResult(req, false);
     return res.status(403).json({ error: 'Neplatný rodinný kód' });
   }
+  noteFamilyAuthResult(req, true);
   if (!contentBase64 || typeof contentBase64 !== 'string') {
     return res.status(400).json({ error: 'Chybí contentBase64' });
   }
@@ -695,6 +779,7 @@ async function getFullDomainSSLInfo(urlOrHostname: string) {
     trustScore -= 35;
   }
 
+  // TRUST-ENGINE-001: cheap TLD = supporting SIGNAL only (not proof of fraud)
   if (
     domain.endsWith('.online') ||
     domain.endsWith('.top') ||
@@ -702,8 +787,10 @@ async function getFullDomainSSLInfo(urlOrHostname: string) {
     domain.endsWith('.xyz') ||
     domain.endsWith('.info')
   ) {
-    trustScore -= 20;
-    warnings.push('⚠️ Podezřelá levná koncovka domény (.online, .top, .xyz, .site).');
+    trustScore -= 12;
+    warnings.push(
+      'ℹ️ Koncovka domény je v seznamu levnějších TLD — podpůrný signál, ne důkaz podvodu.'
+    );
   }
 
   trustScore = Math.max(5, Math.min(100, trustScore));
@@ -746,166 +833,39 @@ const getGeminiClient = () => {
   });
 };
 
-// Fallback response builder if AI key is missing, quota exceeded, or API errors
+// Fallback / hybrid: Rule Engine owns verdict (Truth Contract — TLD alone never forces PODVOD)
 const createFallbackResult = (
   urlInput: string = '',
   textInput: string = '',
   userNote: string = '',
   imageBase64: string = '',
-  sslDomainInfo?: any
+  sslDomainInfo?: any,
+  phishing?: { checked?: boolean; matched?: boolean; pattern?: string; killed?: boolean }
 ) => {
-  const combined = (urlInput + ' ' + textInput + ' ' + userNote).toLowerCase();
   const hasImage = Boolean(imageBase64 && imageBase64.length > 50);
-  const isEshopMentioned = combined.includes('eshop') || combined.includes('e-shop') || combined.includes('screenshot_eshopu') || combined.includes('obchod');
-
-  let safetyLevel: 'DUVERYHODNE' | 'OPATRNOSTI' | 'PODVOD' = 'OPATRNOSTI';
-  let trustScore = 50;
-  let headline = 'Vyžaduje zvýšenou opatrnost při komunikaci';
-  let summaryForSenior =
-    'Tuto nabídku je potřeba důkladně prověřit. Nikdy neposílejte peníze dopředu a neumísťujte údaje ze své platební karty na neznámé odkazy.';
-  let actionRecommendation: 'KOUPIT_BEZPECNE' | 'POUZE_OSOBNI_PREDANI' | 'NEKUPOVAT_NEPLATIT' =
-    'POUZE_OSOBNI_PREDANI';
-
-  const actionAdvice = [
-    'Trvejte výhradně na osobním předání a vyzkoušení zboží.',
-    'Nikdy neotvírejte odkazy z SMS nebo WhatsAppu, které vám pošle kupující či prodávající.',
-    'Žádná doručovací služba (DPD, Zásilkovna, Česká pošta) nepožaduje vyplnění karty pro převzetí peněz.',
-  ];
-
-  const riskFactors = [];
-  const positiveFactors = [];
-  const sellerChecks = [];
-
-  // Check for prominent scam indicators in fallback
-  if (
-    combined.includes('kuryr') ||
-    combined.includes('kurýr') ||
-    combined.includes('dpd') ||
-    combined.includes('zasilkovna') ||
-    combined.includes('platba-') ||
-    combined.includes('potvrdit prijeti') ||
-    combined.includes('potvrdit přijetí') ||
-    combined.includes('garance') ||
-    combined.includes('investice') ||
-    combined.includes('.online') ||
-    combined.includes('.store') ||
-    combined.includes('.xyz') ||
-    combined.includes('.top') ||
-    combined.includes('.info')
-  ) {
-    safetyLevel = 'PODVOD';
-    trustScore = 12;
-    headline = '🛑 VELKÉ RIZIKO PODVODU! Neotvírejte odkaz a neplaťte!';
-    summaryForSenior =
-      'VAROVÁNÍ PRO OTCE: Tento inzerát nebo zpráva má všechny znaky známého internetového podvodu! Podvodníci předstírají, že pošlou kurýra nebo že jde o výhodnou nabídku, ale chtějí z vás vylákat údaje k bankovní kartě.';
-    actionRecommendation = 'NEKUPOVAT_NEPLATIT';
-    riskFactors.push({
-      id: 'rf1',
-      severity: 'VYSOKE' as const,
-      title: 'Podvodný odkaz na falešného kurýra nebo falešný web',
-      description:
-        'Adresa webu se liší od oficiálních českých služeb. Zásilkovna ani DPD nikdy nevyžadují zadání údajů karty od prodávajícího!',
-    });
-    riskFactors.push({
-      id: 'rf2',
-      severity: 'VYSOKE' as const,
-      title: 'Finanční nebezpečí pro bankovní účet',
-      description:
-        'Vyplněním údajů o kartě by podvodníci získali přímý přístup k vašim penězům v bance.',
-    });
-    sellerChecks.push('Požaduje komunikaci mimo oficiální aplikaci (např. WhatsApp)');
-    sellerChecks.push('Vyžaduje okamžitou akci pod časovým tlakem');
-  } else if (combined.includes('bazos.cz') || combined.includes('sbazar.cz')) {
-    safetyLevel = 'DUVERYHODNE';
-    trustScore = 88;
-    headline = 'Pravděpodobně legitimní inzerát na známém portálu';
-    summaryForSenior =
-      'Inzerát se nachází na oficiálním českém portálu. Při nákupu doporučujeme osobní odběr, abyste si zboží před zaplacením prohlédli.';
-    actionRecommendation = 'POUZE_OSOBNI_PREDANI';
-    positiveFactors.push({
-      id: 'pf1',
-      title: 'Oficiální česká doména',
-      description: 'Odkaz směřuje na prověřený inzertní server Bazoš.cz nebo Sbazar.cz.',
-    });
-    actionAdvice.unshift('Při osobním převzetí si zboží nejprve zkontrolujte.');
-  }
-
-  let domainName = '';
-  try {
-    if (urlInput) {
-      const parsed = new URL(urlInput.startsWith('http') ? urlInput : 'https://' + urlInput);
-      domainName = parsed.hostname;
-    }
-  } catch {
-    domainName = urlInput || 'Zadaný odkaz';
-  }
-
-  const trustedAlternatives = [
-    {
-      name: 'Heureka.cz (Srovnání cen a overené e-shopy)',
-      url: 'https://www.heureka.cz',
-      description: 'Porovnejte ceny stejného zboží u ověřených českých obchodníků se zárukou a garancí nákupu.',
-      badge: 'Srovnávač cen & Garance',
-    },
-    {
-      name: 'Alza.cz / Datart.cz (Oficiální e-shopy)',
-      url: 'https://www.alza.cz',
-      description: 'Bezpečný nákup nového i zánovního/rozbaleného zboží se 2 roky zárukou a možností vyzvednutí na pobočce.',
-      badge: 'Oficiální prodejce + Záruka',
-    },
-    {
-      name: 'Bazoš.cz / Sbazar.cz (S filtrem na osobní předání)',
-      url: 'https://www.bazos.cz',
-      description: 'Při nákupu z druhé ruky vyhledávejte inzeráty ve svém okrese a trvejte na osobním převzetí s vyzkoušením.',
-      badge: 'Pouze osobní předání',
-    },
-  ];
-
-  return withTrustMeta({
-    id: 'res-' + Date.now(),
-    timestamp: Date.now(),
-    inputUrl: urlInput,
-    inputSnippet: textInput,
-    safetyLevel,
-    trustScore,
-    headline,
-    summaryForSenior,
-    actionRecommendation,
-    actionAdvice,
-    riskFactors,
-    positiveFactors,
-    sellerChecks,
-    isFallback: true,
-    urlAnalysis: {
-      domainName: domainName || 'Analýza textu / snímku',      isOfficialDomain: safetyLevel === 'DUVERYHODNE',
-      domainWarning:
-        safetyLevel === 'PODVOD'
-          ? 'Tato doména vypadá jako neoficiální napodobenina známé služby.'
-          : undefined,
-    },
-    priceEvaluation: {
-      isPriceSuspicious: safetyLevel === 'PODVOD',
-      priceComment:
-        safetyLevel === 'PODVOD'
-          ? 'Nereálně výhodná cena je nejčastější návnadou internetových podvodníků.'
-          : 'Cena se zdá odpovídat standardní hodnotě zboží.',
-      estimatedMarketPrice: safetyLevel === 'PODVOD' ? 'Přibližně o 40 % - 70 % vyšší v běžných e-shopech' : undefined,
-      suggestedSearchTerm: textInput ? textInput.slice(0, 40) : 'Elektronika a zboží',
-    },
-    eshopVisualAnalysis: {
-      isEshopDetected: hasImage || isEshopMentioned,
-      visualTrustGrade: safetyLevel === 'PODVOD' ? 'PODVODNE' : 'USPOKOJIVE',
-      designComment: hasImage
-        ? 'Aplikace zpracovala přiložený snímek obrazovky / fotku e-shopu. Vypadá to na standardní snímek obchodu, doporučujeme zkontrolovat přítomnost IČO v patičce.'
-        : 'Při nákupu doporučujeme zkontrolovat vizuální prvky e-shopu (patčka, IČO, kontakty).',
-      detectedVisualFlags: hasImage
-        ? ['Analyzován přiložený snímek obrazovky e-shopu', 'Doporučeno ověření IČO na rzp.cz']
-        : ['Neznámý prodejce bez ověření IČO'],
-      contactInfoVisibility: 'Doporučujeme zkontrolovat přítomnost IČO v obchodním rejstříku rzp.cz',
-    },
+  const factBundle = buildFactBundle({
+    url: urlInput,
+    rawText: textInput,
+    userNote,
+    hasImage,
     sslDomainInfo,
-    trustedAlternatives,
-  }, 'hybrid_rules');
+    phishingChecked: phishing?.checked ?? Boolean(phishing?.matched || phishing?.killed),
+    phishingMatched: phishing?.matched,
+    phishingPattern: phishing?.pattern,
+    phishingKilled: phishing?.killed,
+  });
+  const decision = decideFromFacts(factBundle);
+  return mergeAnalysisResult({
+    url: urlInput,
+    rawText: textInput,
+    factBundle,
+    decision,
+    ai: null,
+    aiAccepted: false,
+    sslDomainInfo,
+    verdictSource: phishing?.killed ? 'phishing_kill' : 'hybrid_rules',
+    rulesVersion: RULES_VERSION,
+  });
 };
 
 // API Endpoint for Analyzing Advertisements
@@ -967,136 +927,91 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
       }
     }
 
-    // URL PHISHING VALIDATOR: Check against known phishing domains before Gemini API call
+    // Layer 1+2 first: phishing + facts + rule engine (AI never owns the verdict)
+    // TRUST-ENGINE-001: MEDIUM "suspicious TLD alone" is a SIGNAL, not CONFIRMED_THREAT.
+    // Only HIGH / kill-switch matches set phishingMatched → PODVOD in Rule Engine.
+    // phishingChecked=true only when validator actually ran (needed for NO_VERIFIED_THREAT_FOUND).
+    let phishingMeta: {
+      checked?: boolean;
+      matched?: boolean;
+      pattern?: string;
+      killed?: boolean;
+    } = {};
     if (url) {
       const phishingCheck = checkPhishingUrl(url);
+      phishingMeta.checked = true;
+      const hardPhish =
+        phishingCheck.isPhishing &&
+        (phishingCheck.isKilledBeforeGemini === true || phishingCheck.severity === 'HIGH');
+      if (hardPhish) {
+        phishingMeta.matched = true;
+        phishingMeta.pattern = phishingCheck.matchedPattern;
+        phishingMeta.killed = Boolean(phishingCheck.isKilledBeforeGemini);
+      }
       if (phishingCheck.isPhishing && phishingCheck.isKilledBeforeGemini) {
-        console.log(`[URL Validator] Blocked dangerous phishing URL directly before Gemini API call: ${url} (${phishingCheck.matchedPattern})`);
-
-        const phishResult = withTrustMeta(
-          {
-            id: 'res-phish-' + Date.now(),
-            timestamp: Date.now(),
-            inputUrl: url,
-            inputSnippet: rawText,
-            safetyLevel: 'PODVOD',
-            trustScore: 0,
-            headline: `🛑 ODHALEN PHISHINGOVÝ ODKAZ! (${phishingCheck.matchedPattern || 'Podvodná doména'})`,
-            summaryForSenior: `VAROVÁNÍ PRO OTCE: Odkaz "${phishingCheck.domainName || url}" byl okamžitě vyhodnocen jako nebezpečný phishingový podvod ještě před odesláním dotazu. ${phishingCheck.reason}`,
-            actionRecommendation: 'NEKUPOVAT_NEPLATIT',
-            actionAdvice: [
-              'Na tento odkaz v žádném případě neklikatejte a nevyplňujte žádné formuláře.',
-              'Nikdy nezadávejte číslo své bankovní karty ani přihlašovací údaje do bankovnictví.',
-              'Pokud vám odkaz poslal kupující či prodávající, okamžitě s ním ukončete komunikaci.',
-            ],
-            riskFactors: [
-              {
-                id: 'rf-phish-1',
-                severity: 'VYSOKE',
-                title: `Phishingová doména: ${phishingCheck.matchedPattern || 'Nebezpečný odkaz'}`,
-                description:
-                  phishingCheck.reason ||
-                  'Doména neodpovídá oficiální české službě a slouží k vylákání peněz nebo údajů z karty.',
-              },
-              {
-                id: 'rf-phish-2',
-                severity: 'VYSOKE',
-                title: 'Vysoké riziko ztráty peněz na bankovním účtu',
-                description:
-                  'Podvodné stránky tohoto typu jsou vytvořeny s cílem získat přímý přístup k vaší platební kartě.',
-              },
-            ],
-            positiveFactors: [],
-            sellerChecks: [
-              'Kupující/prodávající poslal nebezpečný odkaz mimo oficiální aplikaci',
-              'Vyžaduje vyplnění údajů o platební kartě',
-            ],
-            urlAnalysis: {
-              domainName: phishingCheck.domainName || url,
-              isOfficialDomain: false,
-              domainWarning: `⚠️ DETEKOVÁN PHISHING: ${phishingCheck.reason}`,
-            },
-            priceEvaluation: {
-              isPriceSuspicious: true,
-              priceComment: 'Podvodné odkazy jsou často doprovázeny nereálně výhodnými cenami.',
-            },
-            trustedAlternatives: [
-              {
-                name: 'Heureka.cz (Srovnání cen a overené e-shopy)',
-                url: 'https://www.heureka.cz',
-                description:
-                  'Porovnejte ceny stejného zboží u ověřených českých obchodníků se zárukou a garancí nákupu.',
-                badge: 'Srovnávač cen & Garance',
-              },
-              {
-                name: 'Alza.cz / Datart.cz (Oficiální e-shopy)',
-                url: 'https://www.alza.cz',
-                description:
-                  'Bezpečný nákup nového i zánovního/rozbaleného zboží se 2 roky zárukou a možností vyzvednutí na pobočce.',
-                badge: 'Oficiální prodejce + Záruka',
-              },
-              {
-                name: 'Bazoš.cz / Sbazar.cz (S filtrem na osobní předání)',
-                url: 'https://www.bazos.cz',
-                description:
-                  'Při nákupu z druhé ruky vyhledávejte inzeráty ve svém okrese a trvejte na osobním převzetí s vyzkoušením.',
-                badge: 'Pouze osobní předání',
-              },
-            ],
-          },
-          'phishing_kill'
+        // Canonical path only: FACTS → Rule Engine → mergeResult (no ad-hoc enriched claims)
+        console.log(
+          `[URL Validator] Phishing kill before Gemini: ${url} (${phishingCheck.matchedPattern})`
+        );
+        const phishResult = createFallbackResult(
+          url,
+          rawText,
+          userNote,
+          imageBase64,
+          sslDomainInfo,
+          phishingMeta
         );
         setCachedVerdict(cacheKey, phishResult);
         return res.json(phishResult);
       }
     }
 
+    const factBundle = buildFactBundle({
+      url,
+      rawText,
+      userNote,
+      hasImage,
+      sslDomainInfo,
+      phishingChecked: phishingMeta.checked,
+      phishingMatched: phishingMeta.matched,
+      phishingPattern: phishingMeta.pattern,
+      phishingKilled: phishingMeta.killed,
+    });
+    const decision = decideFromFacts(factBundle);
+
     const ai = getGeminiClient();
 
     if (!ai) {
-      console.log('Gemini client unavailable, using smart safety check rules.');
-      const fallback = createFallbackResult(url, rawText, userNote, imageBase64, sslDomainInfo);
+      console.log('Gemini client unavailable, using Rule Engine presentation templates.');
+      const fallback = mergeAnalysisResult({
+        url,
+        rawText,
+        factBundle,
+        decision,
+        ai: null,
+        aiAccepted: false,
+        sslDomainInfo,
+        verdictSource: 'hybrid_rules',
+        rulesVersion: RULES_VERSION,
+      });
       setCachedVerdict(cacheKey, fallback);
       return res.json(fallback);
     }
 
-    const systemInstruction = `Jsi špičkový bezpečnostní analytik specializovaný na odhalování internetových podvodů, phishingových e-shopů, falešných inzerátů (Bazoš, Sbazar, Vinted, Facebook Marketplace), falešných investičních nabídek a SMS/WhatsApp podvodů v České republice.
-
-Tvojím úkolem je analyzovat inzerát/nabídku a napsat hodnocení pro staršího pána (otce), který chce nakupovat nebo prodávat na internetu bezpečně.
-
-PRAVIDLA PRO HODNOCENÍ:
-1. Píšeš srozumitelně, klidně, bez složitého technického žargonu.
-2. Rozlišuj 3 úrovně bezpečnosti (safetyLevel):
-   - 'DUVERYHODNE': Prověřený oficiální web/inzerát bez podezřelých znaků (např. oficiální bazos.cz, alza.cz, sbazar.cz).
-   - 'OPATRNOSTI': Standardní inzerát od neznámé soukromé osoby, kde je potřeba opatrnost (např. osobní předání, prověření stavu zboží).
-   - 'PODVOD': Jasný podvod nebo vysoké riziko (falešný kurýr DPD/Zásilkovna, klon webu banky, nákup značkového zboží se slevou 90% na neznámém podvodném e-shopu, sliby pohádkových zisků z investic).
-
-Vrátíš výhradně strukturovaný JSON odpovídající požadovanému schématu. All texts MUST be in CZECH language.`;
-
-    const promptText = `Prosím proveď důkladnou bezpečnostní prověrku následujícího inzerátu / nabídky / e-shopu:
-${url ? `Odkaz URL: ${url}\n` : ''}
-${rawText ? `Text inzerátu / zprávy: ${rawText}\n` : ''}
-${userNote ? `Poznámka / Režim analýzy: ${userNote}\n` : ''}
-
-Zkontroluj zejména:
-1. Doménu a zda se nejedná o napodobeninu / podvodný klon (např. bazos-platba.cz místo bazos.cz).
-2. Pokud je přiložena fotka / snímek e-shopu nebo inzerátu, zhodnoť jeho VIZUÁLNÍ DŮVĚRYHODNOST:
-   - Profesionálnost designu a šablony e-shopu.
-   - Přítomnost nebo chybějící kontaktní údaje (české IČO, adresa, telefon) v patičce či hlavičce.
-   - Falešné bezpečnostní ikonky ("100% Gwarancja", "Verifikováno", "Šifrovaná platba" vložené jako nekvalitní obrázek).
-   - Strojové / lámané české překlady v grafech, bannerech a tlačítkách.
-   - Nátlakové vizuální prvky (odpočítávání času "Sleva vyprší za 03:00", blikající bannery).
-   - Výsledek vyplň do strukturovaného objektu 'eshopVisualAnalysis'.
-3. Zda nenabízí "falešného kurýra", vyplnění údajů z karty, platbu předem na anonymní účet.
-4. Zda je cena reálná nebo podezřele nízká.
-5. Poskytni otci jasnou radu co dělat (např. NEKLIKAT, NEZADÁVAT KARTU, nebo KOUPIT BEZPEČNĚ OSOBNĚ).
-6. Pokud je nabídka podezřelá nebo podvodná (nebo i pro porovnání), navrhni v poli 'trustedAlternatives' 2 až 4 prověřené české obchody, srovnávače (Heureka) nebo bezpečné portály k nákupu tohoto zboží se zárukou či osobním odběrem.`;
+    const systemInstruction = buildAnalyzeSystemInstruction();
+    const promptText = buildAnalyzeUserPrompt({
+      url,
+      rawText,
+      userNote,
+      hasImage,
+      factBundle,
+      decision,
+    });
 
     const contentsParts: any[] = [];
 
     if (imageBase64) {
-      // Remove header if present (e.g. data:image/png;base64,)
-      const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const cleanBase64 = String(imageBase64).replace(/^data:image\/\w+;base64,/, '');
       contentsParts.push({
         inlineData: {
           mimeType: 'image/jpeg',
@@ -1109,6 +1024,7 @@ Zkontroluj zejména:
 
     if (ai) {
       try {
+        const schemaProps = analyzeResponseSchemaProperties();
         const response = await ai.models.generateContent({
           model: 'gemini-3.6-flash',
           contents: { parts: contentsParts },
@@ -1118,120 +1034,9 @@ Zkontroluj zejména:
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
-              properties: {
-                safetyLevel: {
-                  type: Type.STRING,
-                  description: "Must be 'DUVERYHODNE', 'OPATRNOSTI', or 'PODVOD'",
-                },
-                trustScore: {
-                  type: Type.INTEGER,
-                  description: 'Score from 0 (total scam) to 100 (100% safe)',
-                },
-                headline: {
-                  type: Type.STRING,
-                  description: 'Short headline in Czech summarize result',
-                },
-                summaryForSenior: {
-                  type: Type.STRING,
-                  description: 'Clear 2-3 sentences explanation tailored for a senior father in Czech',
-                },
-                actionRecommendation: {
-                  type: Type.STRING,
-                  description: "Must be 'KOUPIT_BEZPECNE', 'POUZE_OSOBNI_PREDANI', or 'NEKUPOVAT_NEPLATIT'",
-                },
-                actionAdvice: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                  description: 'Step-by-step action bullets for father',
-                },
-                riskFactors: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING },
-                      severity: { type: Type.STRING, description: "'VYSOKE', 'STREDNI', or 'NIZKE'" },
-                      title: { type: Type.STRING },
-                      description: { type: Type.STRING },
-                    },
-                    required: ['id', 'severity', 'title', 'description'],
-                  },
-                },
-                positiveFactors: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING },
-                      title: { type: Type.STRING },
-                      description: { type: Type.STRING },
-                    },
-                    required: ['id', 'title', 'description'],
-                  },
-                },
-                sellerChecks: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
-                urlAnalysis: {
-                  type: Type.OBJECT,
-                  properties: {
-                    domainName: { type: Type.STRING },
-                    isOfficialDomain: { type: Type.BOOLEAN },
-                    domainWarning: { type: Type.STRING },
-                  },
-                  required: ['domainName', 'isOfficialDomain'],
-                },
-                priceEvaluation: {
-                  type: Type.OBJECT,
-                  properties: {
-                    isPriceSuspicious: { type: Type.BOOLEAN },
-                    priceComment: { type: Type.STRING },
-                    estimatedMarketPrice: { type: Type.STRING, description: 'Estimated real market value in Czech crowns, e.g. "Cca 12 000 - 15 000 Kč"' },
-                    suggestedSearchTerm: { type: Type.STRING, description: 'Clean product name for searching on Heureka.cz e.g. "iPhone 13 128GB"' },
-                  },
-                  required: ['isPriceSuspicious', 'priceComment'],
-                },
-                eshopVisualAnalysis: {
-                  type: Type.OBJECT,
-                  properties: {
-                    isEshopDetected: { type: Type.BOOLEAN, description: 'True if an e-shop webpage screenshot or web shop is analyzed' },
-                    visualTrustGrade: { type: Type.STRING, description: "'VYBORNE', 'USPOKOJIVE', 'PODROBNOSTI_CHYBI', or 'PODVODNE'" },
-                    designComment: { type: Type.STRING, description: 'Assessment of visual design, trustworthiness, templates, and badges' },
-                    detectedVisualFlags: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Visual indicators like fake security badges, machine translations, missing ICO, countdown timers' },
-                    contactInfoVisibility: { type: Type.STRING, description: 'Presence and clarity of Czech contact info, address, IČO, and customer service' },
-                  },
-                  required: ['isEshopDetected'],
-                },
-                trustedAlternatives: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      name: { type: Type.STRING, description: 'Store or portal name (e.g. Heureka, Alza, Datart, Bazoš s osobním předáním)' },
-                      url: { type: Type.STRING, description: 'Direct URL to store or portal search' },
-                      description: { type: Type.STRING, description: 'Why this is a safe alternative' },
-                      estimatedPrice: { type: Type.STRING, description: 'Estimated safe market price or range in CZK' },
-                      badge: { type: Type.STRING, description: 'e.g. Oficiální prodejce, Srovnávač Heureka, Osobní odběr' },
-                    },
-                    required: ['name', 'url', 'description'],
-                  },
-                  description: 'List of 2-4 safe and trusted Czech alternative stores or search links for the requested product',
-                },
-              },
-              required: [
-                'safetyLevel',
-                'trustScore',
-                'headline',
-                'summaryForSenior',
-                'actionRecommendation',
-                'actionAdvice',
-                'riskFactors',
-                'positiveFactors',
-                'sellerChecks',
-                'urlAnalysis',
-                'priceEvaluation',
-              ],
+              properties: schemaProps as any,
+              // Presentation only — structured claims / actionAdvice are server-owned
+              required: ['safetyLevel', 'trustScore', 'headline', 'summaryForSenior'],
             },
           },
         });
@@ -1240,7 +1045,6 @@ Zkontroluj zejména:
         if (text) {
           const parsedData = cleanAndParseJson(text);
 
-          // Extract search grounding sources if available
           const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
           const groundingSources: { title: string; url: string }[] = [];
           if (chunks && Array.isArray(chunks)) {
@@ -1254,28 +1058,73 @@ Zkontroluj zejména:
             }
           }
 
-          const finalResult = withTrustMeta(
-            {
-              id: 'res-' + Date.now(),
-              timestamp: Date.now(),
-              inputUrl: url,
-              inputSnippet: rawText,
-              ...parsedData,
-              sslDomainInfo: sslDomainInfo || parsedData.sslDomainInfo,
-              groundingSources: groundingSources.length > 0 ? groundingSources : undefined,
-            },
-            'ai'
+          // Kill switch: reject AI text that violates Truth Contract
+          const validation = validateAiPresentation(
+            parsedData,
+            decision,
+            factBundle.officialDomainStatus,
+            factBundle
           );
+
+          if (validation.ok === false) {
+            const rejectReasons = validation.reasons;
+            console.warn('[TruthContract] AI output REJECTED:', rejectReasons.join('; '));
+            const rejected = mergeAnalysisResult({
+              url,
+              rawText,
+              factBundle,
+              decision,
+              ai: null,
+              aiAccepted: false,
+              sslDomainInfo,
+              groundingSources: groundingSources.length > 0 ? groundingSources : undefined,
+              verdictSource: 'ai_rejected',
+              rulesVersion: RULES_VERSION,
+            });
+            // Honest user-facing note — never show the invalid AI claims
+            rejected.summaryForSenior =
+              'Výsledek z AI se nepodařilo bezpečně ověřit, proto ukazujeme hodnocení podle našich pevných pravidel a naměřených údajů. ' +
+              String(rejected.summaryForSenior || '');
+            rejected.aiRejectReasons = rejectReasons;
+            setCachedVerdict(cacheKey, rejected);
+            return res.json(rejected);
+          }
+
+          // Force Rule Engine verdict fields (AI is presentation only)
+          const finalResult = mergeAnalysisResult({
+            url,
+            rawText,
+            factBundle,
+            decision,
+            ai: parsedData,
+            aiAccepted: true,
+            sslDomainInfo: sslDomainInfo || parsedData.sslDomainInfo,
+            groundingSources: groundingSources.length > 0 ? groundingSources : undefined,
+            verdictSource: 'ai',
+            rulesVersion: RULES_VERSION,
+          });
           setCachedVerdict(cacheKey, finalResult);
           return res.json(finalResult);
         }
       } catch (geminiErr: any) {
-        console.warn('Gemini API call failed or quota exceeded, using fallback rule engine:', geminiErr?.message || geminiErr);
+        console.warn(
+          'Gemini API call failed or quota exceeded, using Rule Engine fallback:',
+          geminiErr?.message || geminiErr
+        );
       }
     }
 
-    // Return smart fallback rule result if Gemini is unavailable, rate-limited, or fails
-    const fallbackResult = createFallbackResult(url, rawText, userNote, imageBase64, sslDomainInfo);
+    const fallbackResult = mergeAnalysisResult({
+      url,
+      rawText,
+      factBundle,
+      decision,
+      ai: null,
+      aiAccepted: false,
+      sslDomainInfo,
+      verdictSource: 'hybrid_rules',
+      rulesVersion: RULES_VERSION,
+    });
     setCachedVerdict(cacheKey, fallbackResult);
     return res.json(fallbackResult);
   } catch (error) {
@@ -1521,13 +1370,8 @@ app.get('/api/scam-alerts', heavyLimiter, async (req, res) => {
       return res.json(payload);
     }
 
-    const systemInstruction = `Jsi specializovaný bezpečnostní systém hlídající kybernetické hrozby a internetové podvody v České republice.
-Tvojím úkolem je vyhledat nejnovější a nejaktuálnější varování před podvody v inzerátech, na online bazarech (Bazoš, Sbazar, Vinted, Facebook Marketplace), falešnými e-shopy, fiktivními kurýry (DPD, Zásilkovna, Česká pošta), SMS phishingem a bankovními podvody v ČR.
-
-KRITICKÉ PRAVIDLO FORMÁTU: Vrátíš VÝHRADNĚ platný JSON objekt bez jakéhokoliv předřazeného textu nebo teček. Žádné komentáře, žádné tečky za dvojtečkou.`;
-
-    const promptText = `Pomocí živého vyhledávání Google zjisti nejnovější hrozby a aktuální varování před podvody v inzerátech, e-shopech a internetovém nákupu/prodeji v České republice (aktuální zprávy Policie ČR, ČOI, ČBA, Zásilkovny).
-Vrať 4 až 5 nejvýznamnějších aktuálních varování ve formátu JSON podle schématu.`;
+    const systemInstruction = buildScamAlertsSystemInstruction();
+    const promptText = buildScamAlertsUserPrompt();
 
     const response = await withTimeout(
       ai.models.generateContent({
