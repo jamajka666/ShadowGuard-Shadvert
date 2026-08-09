@@ -32,6 +32,10 @@ Guarantee: **100% claim traceability** relative to listed evidence — not absol
 - AI may only phrase **`headline` / `summaryForSenior`** (schema has no claim arrays).
 - **Canonical path only:** FACTS → Rule Engine → `mergeAnalysisResult` → USER (including phishing kill).
 - **PROKAZANO_OFICIALNI ≠ PROKAZANO_BEZPECNE** — known host alone never yields `DUVERYHODNE`.
+- Every **VERIFIED** fact has `evidenceIds` → `EvidenceItem`.
+- Text markers = **SIGNAL** (audit trail via `input_text_scan`), not automatic PODVOD; educational framing weakens weight.
+- `NO_VERIFIED_THREAT_FOUND` only after **executed** phishing check with no hard match.
+- `isPriceSuspicious` only with price evidence (otherwise undefined).
 
 ### Grounding
 

@@ -82,7 +82,8 @@ export interface AdCheckResult {
     domainWarning?: string;
   };
   priceEvaluation: {
-    isPriceSuspicious: boolean;
+    /** Only true with dedicated price evidence; omit/undefined if not evaluated. */
+    isPriceSuspicious?: boolean;
     priceComment: string;
     estimatedMarketPrice?: string;
     suggestedSearchTerm?: string;

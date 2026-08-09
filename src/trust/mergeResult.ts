@@ -174,7 +174,8 @@ export function mergeAnalysisResult(opts: {
       domainWarning,
     },
     priceEvaluation: {
-      isPriceSuspicious: decision.safetyLevel === 'PODVOD',
+      // Only set true when we have dedicated price evidence (none yet)
+      isPriceSuspicious: undefined,
       priceComment: 'Cenu se nepodařilo ověřit z dostupných serverových důkazů.',
       estimatedMarketPrice: undefined,
       suggestedSearchTerm: undefined,

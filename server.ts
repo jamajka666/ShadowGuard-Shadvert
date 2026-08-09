@@ -840,7 +840,7 @@ const createFallbackResult = (
   userNote: string = '',
   imageBase64: string = '',
   sslDomainInfo?: any,
-  phishing?: { matched?: boolean; pattern?: string; killed?: boolean }
+  phishing?: { checked?: boolean; matched?: boolean; pattern?: string; killed?: boolean }
 ) => {
   const hasImage = Boolean(imageBase64 && imageBase64.length > 50);
   const factBundle = buildFactBundle({
@@ -849,6 +849,7 @@ const createFallbackResult = (
     userNote,
     hasImage,
     sslDomainInfo,
+    phishingChecked: phishing?.checked ?? Boolean(phishing?.matched || phishing?.killed),
     phishingMatched: phishing?.matched,
     phishingPattern: phishing?.pattern,
     phishingKilled: phishing?.killed,
@@ -929,18 +930,23 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
     // Layer 1+2 first: phishing + facts + rule engine (AI never owns the verdict)
     // TRUST-ENGINE-001: MEDIUM "suspicious TLD alone" is a SIGNAL, not CONFIRMED_THREAT.
     // Only HIGH / kill-switch matches set phishingMatched → PODVOD in Rule Engine.
-    let phishingMeta: { matched?: boolean; pattern?: string; killed?: boolean } = {};
+    // phishingChecked=true only when validator actually ran (needed for NO_VERIFIED_THREAT_FOUND).
+    let phishingMeta: {
+      checked?: boolean;
+      matched?: boolean;
+      pattern?: string;
+      killed?: boolean;
+    } = {};
     if (url) {
       const phishingCheck = checkPhishingUrl(url);
+      phishingMeta.checked = true;
       const hardPhish =
         phishingCheck.isPhishing &&
         (phishingCheck.isKilledBeforeGemini === true || phishingCheck.severity === 'HIGH');
       if (hardPhish) {
-        phishingMeta = {
-          matched: true,
-          pattern: phishingCheck.matchedPattern,
-          killed: Boolean(phishingCheck.isKilledBeforeGemini),
-        };
+        phishingMeta.matched = true;
+        phishingMeta.pattern = phishingCheck.matchedPattern;
+        phishingMeta.killed = Boolean(phishingCheck.isKilledBeforeGemini);
       }
       if (phishingCheck.isPhishing && phishingCheck.isKilledBeforeGemini) {
         // Canonical path only: FACTS → Rule Engine → mergeResult (no ad-hoc enriched claims)
@@ -966,6 +972,7 @@ app.post('/api/analyze-ad', heavyLimiter, async (req, res) => {
       userNote,
       hasImage,
       sslDomainInfo,
+      phishingChecked: phishingMeta.checked,
       phishingMatched: phishingMeta.matched,
       phishingPattern: phishingMeta.pattern,
       phishingKilled: phishingMeta.killed,

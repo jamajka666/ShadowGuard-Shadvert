@@ -5,7 +5,7 @@
 
 export const TRUTH_CONTRACT_VERSION = '1.0.1';
 /** Bump when rule mapping / kill thresholds change (invalidates verdict cache). */
-export const RULES_VERSION_TRUTH = 'rules-2026-08-08-truth-contract.4';
+export const RULES_VERSION_TRUTH = 'rules-2026-08-08-truth-contract.5';
 
 /** Internal analysis verdict before First Creation UI mapping. */
 export type InternalVerdict = 'DUVERYHODNE' | 'OPATRNOSTI' | 'PODVOD' | 'NEVIME';
@@ -75,27 +75,30 @@ export const UNSUBSTANTIATED_WORLD_CLAIM_PATTERNS: RegExp[] = [
   /právnická osoba/i,
 ];
 
-/** Known service tips — NOT a per-offer security verdict. */
+/**
+ * Neutral tool tips only (variant B) — no "long-known / verified / safe" world-claims.
+ * NOT a security verdict for the analyzed offer.
+ */
 export const GENERAL_KNOWN_SERVICE_TIPS = [
   {
     name: 'Heureka.cz',
     url: 'https://www.heureka.cz',
     description:
-      'Obecná dlouhodobě známá česká služba pro srovnání cen. Toto NENÍ bezpečnostní verdikt k vaší konkrétní nabídce.',
+      'Můžete použít Heureka.cz jako obecný nástroj pro srovnání nabídek. Toto není bezpečnostní verdikt k vaší konkrétní nabídce.',
     badge: 'Obecný tip (ne ověření)',
   },
   {
     name: 'Alza.cz',
     url: 'https://www.alza.cz',
     description:
-      'Obecná dlouhodobě známá česká služba. Toto NENÍ důkaz, že vaše nabídka je bezpečná, ani ověření prodejce.',
+      'Můžete použít Alza.cz jako obecný nákupní odkaz. Toto není ověření prodejce ani důkaz bezpečnosti vaší nabídky.',
     badge: 'Obecný tip (ne ověření)',
   },
   {
     name: 'Bazoš.cz',
     url: 'https://www.bazos.cz',
     description:
-      'Známý inzertní portál. I na známém portálu platí opatrnost u soukromých prodejců a osobní předání.',
+      'Můžete použít Bazoš.cz pro hledání inzerátů. I tam platí opatrnost u soukromých prodejců a osobní předání.',
     badge: 'Obecný tip (ne ověření)',
   },
 ] as const;

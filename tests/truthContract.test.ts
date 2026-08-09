@@ -3,7 +3,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFactBundle } from '../src/trust/facts.ts';
+import { assertVerifiedFactsHaveEvidence, buildFactBundle } from '../src/trust/facts.ts';
 import { decideFromFacts } from '../src/trust/ruleEngine.ts';
 import { validateAiPresentation } from '../src/trust/aiOutputValidator.ts';
 import { mergeAnalysisResult, generalKnownServiceTips } from '../src/trust/mergeResult.ts';
@@ -122,17 +122,32 @@ describe('Rule Engine — hard evidence', () => {
     assert.match(d.reasoningTrace, /PROKAZANO_OFICIALNI|neprokazuje|≠/i);
   });
 
-  it('adversarial: official domain + scam content → PODVOD never DUVERYHODNE', () => {
+  it('adversarial: official domain + scam-like text → OPATRNOSTI (SIGNAL), never DUVERYHODNE', () => {
     const facts = buildFactBundle({
       url: 'https://www.bazos.cz/inzerat/999',
       rawText:
         'Kurýr vám pošle odkaz. Pro potvrzení přijetí zadejte číslo karty na platební stránce.',
       sslDomainInfo: { domain: 'www.bazos.cz', isSslValid: true, domainAgeYears: 20 },
+      phishingChecked: true,
     });
     const d = decideFromFacts(facts);
     assert.equal(facts.officialDomainStatus, 'PROKAZANO_OFICIALNI');
-    assert.equal(d.safetyLevel, 'PODVOD');
+    assert.equal(d.safetyLevel, 'OPATRNOSTI');
     assert.notEqual(d.safetyLevel, 'DUVERYHODNE');
+    assert.notEqual(d.safetyLevel, 'PODVOD');
+    assert.ok(d.signals.some((s) => s.signalId.startsWith('sig-scam-text')));
+    assert.equal(d.actionRecommendation, 'NEKUPOVAT_NEPLATIT');
+  });
+
+  it('adversarial: educational article about courier scam must NOT be PODVOD', () => {
+    const facts = buildFactBundle({
+      rawText:
+        'Článek: Jak funguje podvod. Pozor, podvodníci často píší: „Kurýr vám pošle odkaz a zadejte číslo karty.“ Nikdy to nedělejte.',
+      phishingChecked: false,
+    });
+    const d = decideFromFacts(facts);
+    assert.notEqual(d.safetyLevel, 'PODVOD');
+    assert.equal(facts.educationalScamFraming, true);
   });
 
   it('insufficient data yields NEVIME (UI OPATRNOSTI)', () => {
@@ -151,22 +166,32 @@ describe('Rule Engine — hard evidence', () => {
     assert.equal(d.safetyLevel, 'OPATRNOSTI');
   });
 
-  it('NO_VERIFIED_THREAT_FOUND is not the same as DUVERYHODNE', () => {
+  it('TLS+hostname+RDAP alone must NOT set NO_VERIFIED_THREAT_FOUND', () => {
     const facts = buildFactBundle({
       url: 'https://random-unknown-shop-example.cz',
       rawText: 'Prodáváme elektroniku',
       sslDomainInfo: {
         domain: 'random-unknown-shop-example.cz',
         isSslValid: true,
+        creationDate: '2018-01-01',
         domainAgeYears: 8,
       },
+      // phishing not run
+      phishingChecked: false,
     });
-    const d = decideFromFacts(facts);
-    // Valid SSL + old domain + no phishing ≠ proven safe shop
-    assert.notEqual(d.safetyLevel, 'DUVERYHODNE');
-    assert.ok(
-      facts.threatFinding === 'NO_VERIFIED_THREAT_FOUND' || facts.threatFinding === 'UNKNOWN'
-    );
+    assert.equal(facts.threatFinding, 'UNKNOWN');
+    assert.notEqual(facts.threatFinding, 'NO_VERIFIED_THREAT_FOUND');
+    assert.notEqual(decideFromFacts(facts).safetyLevel, 'DUVERYHODNE');
+  });
+
+  it('NO_VERIFIED_THREAT_FOUND only after phishing check with no hard match', () => {
+    const facts = buildFactBundle({
+      url: 'https://example.com/',
+      sslDomainInfo: { domain: 'example.com', isSslValid: true },
+      phishingChecked: true,
+      phishingMatched: false,
+    });
+    assert.equal(facts.threatFinding, 'NO_VERIFIED_THREAT_FOUND');
   });
 });
 
@@ -301,6 +326,30 @@ describe('AI Output Validator kill switch', () => {
 });
 
 describe('P1 derived facts + server-owned claims', () => {
+  it('every VERIFIED fact has evidenceIds pointing to real evidence', () => {
+    const facts = buildFactBundle({
+      url: 'https://www.bazos.cz/x',
+      rawText: 'kolo',
+      sslDomainInfo: {
+        domain: 'www.bazos.cz',
+        isSslValid: true,
+        creationDate: '2010-01-01',
+        domainAgeYears: 16,
+      },
+      phishingChecked: true,
+    });
+    // cheap TLD host also
+    const cheap = buildFactBundle({
+      url: 'https://shop.xyz/',
+      sslDomainInfo: { domain: 'shop.xyz', isSslValid: true },
+      phishingChecked: true,
+    });
+    for (const b of [facts, cheap]) {
+      const errs = assertVerifiedFactsHaveEvidence(b);
+      assert.deepEqual(errs, [], errs.join('; '));
+    }
+  });
+
   it('domainAgeYears is DERIVED from creationDate fact', () => {
     const facts = buildFactBundle({
       url: 'https://example.com',
@@ -318,6 +367,28 @@ describe('P1 derived facts + server-owned claims', () => {
     assert.ok(creation);
     assert.equal(creation!.verificationStatus, 'VERIFIED');
     assert.deepEqual(age!.derivedFromFactIds, [creation!.factId]);
+  });
+
+  it('PODVOD without price evidence does not set isPriceSuspicious true', () => {
+    const facts = buildFactBundle({
+      url: 'https://zasilkovna-platba-cz.online/pay',
+      phishingChecked: true,
+      phishingMatched: true,
+      phishingKilled: true,
+      phishingPattern: 'Falešná Zásilkovna',
+    });
+    const decision = decideFromFacts(facts);
+    assert.equal(decision.safetyLevel, 'PODVOD');
+    const merged = mergeAnalysisResult({
+      factBundle: facts,
+      decision,
+      ai: null,
+      aiAccepted: false,
+      verdictSource: 'phishing_kill',
+      rulesVersion: 'test',
+    });
+    const price = merged.priceEvaluation as { isPriceSuspicious?: boolean };
+    assert.notEqual(price.isPriceSuspicious, true);
   });
 
   it('mergeResult never passes AI claims; actionAdvice is server template', () => {
@@ -388,9 +459,11 @@ describe('P1 derived facts + server-owned claims', () => {
     assert.match(String(merged.headline), /nebezpečn|Zastavte/i);
   });
 
-  it('generalKnownServiceTips are not security verdicts', () => {
+  it('generalKnownServiceTips are neutral tools, not world-claims of reputation', () => {
     const tips = generalKnownServiceTips();
     assert.ok(tips.length >= 2);
-    assert.ok(tips.every((t) => /ne ověření|NENÍ/i.test(t.description + t.badge)));
+    assert.ok(tips.every((t) => /ne ověření|není bezpečnostní|není ověření/i.test(t.description + t.badge)));
+    assert.ok(tips.every((t) => /Můžete použít/i.test(t.description)));
+    assert.ok(!tips.some((t) => /dlouhodobě známá|ověřená služba|bezpečná služba/i.test(t.description)));
   });
 });

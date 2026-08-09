@@ -20,39 +20,22 @@ export interface RuleDecision {
   reasoningTrace: string;
 }
 
-const SCAM_TEXT_MARKERS = [
-  'kurýr',
-  'kuryr',
-  'zasilkovna-platba',
-  'zásilkovna-platba',
-  'potvrdit přijetí',
-  'potvrdit prijeti',
-  'zadejte číslo karty',
-  'zadejte cislo karty',
-  'ověření karty',
-  'overeni karty',
-  'anydesk',
-  'teamviewer',
-  'garance výnosu',
-  'garance vynosu',
-  'zdvojnásobení vkladu',
-];
-
 function clampScore(n: number): number {
   return Math.max(5, Math.min(100, Math.round(n)));
 }
 
 /**
- * Decide verdict from FACTS + text markers only.
- * TLD and domain age are SIGNALS — they never alone yield PODVOD.
+ * Decide verdict from FACTS + signals.
+ * PODVOD only from hard evidence (phishing DB / kill). Text markers = SIGNAL → OPATRNOSTI.
  */
 export function decideFromFacts(bundle: FactBundle): RuleDecision {
   const signals: SignalItem[] = [];
   const scoreBreakdown: { label: string; delta: number }[] = [];
   let score = 70;
   scoreBreakdown.push({ label: 'základ', delta: 70 });
+  let actionRecommendation: RuleDecision['actionRecommendation'] = 'POUZE_OSOBNI_PREDANI';
 
-  // --- Hard evidence: phishing kill ---
+  // --- Hard evidence only: phishing kill / hard match ---
   if (bundle.phishingMatched) {
     return {
       internalVerdict: 'PODVOD',
@@ -70,23 +53,42 @@ export function decideFromFacts(bundle: FactBundle): RuleDecision {
     };
   }
 
-  // Strong text / URL scam markers (multiple structural cues)
+  // Text markers = SIGNAL only (never alone → PODVOD). Educational framing weakens weight.
+  const scamHits = bundle.scamTextMarkers || [];
   const text = bundle.textCombined;
-  const scamHits = SCAM_TEXT_MARKERS.filter((m) => text.includes(m));
-  if (scamHits.length >= 1 && (text.includes('karta') || text.includes('kartu') || text.includes('platba') || scamHits.length >= 2)) {
-    return {
-      internalVerdict: 'PODVOD',
-      safetyLevel: 'PODVOD',
-      trustScore: 12,
-      signals,
-      scoreBreakdown: [
-        { label: 'základ', delta: 70 },
-        { label: `scam text markers: ${scamHits.join(', ')}`, delta: -58 },
-      ],
-      actionRecommendation: 'NEKUPOVAT_NEPLATIT',
-      insufficientEvidence: false,
-      reasoningTrace: `Verdikt PODVOD: silné textové markery známých podvodů (${scamHits.join(', ')}).`,
-    };
+  if (scamHits.length >= 1) {
+    const strongCombo =
+      (text.includes('karta') || text.includes('kartu') || text.includes('platba') || scamHits.length >= 2) &&
+      !bundle.educationalScamFraming;
+    if (strongCombo) {
+      const delta = -22;
+      score += delta;
+      scoreBreakdown.push({ label: `textové markery (SIGNAL): ${scamHits.join(', ')}`, delta });
+      signals.push({
+        signalId: 'sig-scam-text',
+        label: `Text obsahuje vzory podobné podvodům (${scamHits.join(', ')}) — podpůrný signál, ne automatický důkaz`,
+        scoreDelta: delta,
+        aloneCannotMakePodvod: true,
+      });
+      actionRecommendation = 'NEKUPOVAT_NEPLATIT';
+    } else if (scamHits.length > 0) {
+      const delta = bundle.educationalScamFraming ? -4 : -12;
+      score += delta;
+      scoreBreakdown.push({
+        label: bundle.educationalScamFraming
+          ? `textové markery ve vzdělávacím/varovném kontextu: ${scamHits.join(', ')}`
+          : `textové markery (slabší SIGNAL): ${scamHits.join(', ')}`,
+        delta,
+      });
+      signals.push({
+        signalId: 'sig-scam-text-weak',
+        label: bundle.educationalScamFraming
+          ? 'Text zmiňuje podvodní vzory v kontextu varování/vysvětlení — neprohlašujeme PODVOD'
+          : `Text obsahuje možné podvodní vzory (${scamHits.join(', ')})`,
+        scoreDelta: delta,
+        aloneCannotMakePodvod: true,
+      });
+    }
   }
 
   // SSL invalid — strong negative but with other signals can be PODVOD; alone → OPATRNOSTI high risk
@@ -143,10 +145,11 @@ export function decideFromFacts(bundle: FactBundle): RuleDecision {
       trustScore: clampScore(score),
       signals,
       scoreBreakdown,
-      actionRecommendation: 'POUZE_OSOBNI_PREDANI',
+      actionRecommendation:
+        actionRecommendation === 'NEKUPOVAT_NEPLATIT' ? 'NEKUPOVAT_NEPLATIT' : 'POUZE_OSOBNI_PREDANI',
       insufficientEvidence: true,
       reasoningTrace:
-        'Verdikt OPATRNOSTI: doména je na seznamu známých služeb (PROKAZANO_OFICIALNI), ale to neprokazuje bezpečnost konkrétní nabídky, prodejce ani obsahu. PROKAZANO_OFICIALNI ≠ PROKAZANO_BEZPECNE. NO_VERIFIED_THREAT_FOUND ≠ DUVERYHODNE.',
+        'Verdikt OPATRNOSTI: doména je na seznamu známých služeb (PROKAZANO_OFICIALNI), ale to neprokazuje bezpečnost konkrétní nabídky, prodejce ani obsahu. PROKAZANO_OFICIALNI ≠ PROKAZANO_BEZPECNE. Textové markery jsou jen SIGNAL. NO_VERIFIED_THREAT_FOUND ≠ DUVERYHODNE.',
     };
   }
 
@@ -179,16 +182,14 @@ export function decideFromFacts(bundle: FactBundle): RuleDecision {
       trustScore: clampScore(score),
       signals,
       scoreBreakdown,
-      actionRecommendation: 'POUZE_OSOBNI_PREDANI',
+      actionRecommendation,
       insufficientEvidence: false,
       reasoningTrace:
-        'Verdikt OPATRNOSTI: pouze podpůrné signály (např. TLD, stáří). Žádný samostatný signál nepostačuje k PODVOD. Absence silné hrozby ≠ důkaz bezpečnosti.',
+        'Verdikt OPATRNOSTI: pouze podpůrné signály (text, TLD, stáří…). Žádný samostatný signál nepostačuje k PODVOD. PODVOD jen při hard phishing důkazu.',
     };
   }
 
   if (bundle.sslValid === false && (bundle.cheapTld || (bundle.domainAgeYears != null && bundle.domainAgeYears < 0.25))) {
-    // Multiple independent negative measured facts → still OPATRNOSTI unless scam text
-    // (invalid SSL + young is serious caution, not automatic legal "scam proof")
     return {
       internalVerdict: 'OPATRNOSTI',
       safetyLevel: 'OPATRNOSTI',
@@ -198,11 +199,10 @@ export function decideFromFacts(bundle: FactBundle): RuleDecision {
       actionRecommendation: 'NEKUPOVAT_NEPLATIT',
       insufficientEvidence: false,
       reasoningTrace:
-        'Verdikt OPATRNOSTI (vysoké riziko): neplatné TLS a další signály. Bez potvrzení z phishing DB neprohlašujeme automaticky PODVOD jako právní fakt — doporučujeme neplatit.',
+        'Verdikt OPATRNOSTI (vysoké riziko): neplatné TLS a další signály. Bez hard phishing match neprohlašujeme PODVOD.',
     };
   }
 
-  // Default: some data, no hard proof either way
   if (!bundle.hasText && !bundle.hasImage && bundle.hasUrl && bundle.sslValid === true && signals.length === 0) {
     return {
       internalVerdict: 'OPATRNOSTI',
@@ -213,7 +213,22 @@ export function decideFromFacts(bundle: FactBundle): RuleDecision {
       actionRecommendation: 'POUZE_OSOBNI_PREDANI',
       insufficientEvidence: true,
       reasoningTrace:
-        'Verdikt OPATRNOSTI: máme platné TLS, ale málo kontextu o nabídce. NO_VERIFIED_THREAT_FOUND ≠ DUVERYHODNE.',
+        'Verdikt OPATRNOSTI: máme platné TLS, ale málo kontextu o nabídce. Threat status jen podle skutečné phishing kontroly.',
+    };
+  }
+
+  // Strong text markers without phishing DB → still OPATRNOSTI (may advise not to pay)
+  if (signals.some((s) => s.signalId.startsWith('sig-scam-text'))) {
+    return {
+      internalVerdict: 'OPATRNOSTI',
+      safetyLevel: 'OPATRNOSTI',
+      trustScore: clampScore(score),
+      signals,
+      scoreBreakdown,
+      actionRecommendation,
+      insufficientEvidence: false,
+      reasoningTrace:
+        'Verdikt OPATRNOSTI: textové markery jsou auditovatelný SIGNAL (viz FACT input_text_scan), ne hard důkaz PODVOD. Vzdělávací/varovný text nesmí sám o sobě vytvořit PODVOD.',
     };
   }
 
@@ -223,7 +238,7 @@ export function decideFromFacts(bundle: FactBundle): RuleDecision {
     trustScore: clampScore(score),
     signals,
     scoreBreakdown,
-    actionRecommendation: 'POUZE_OSOBNI_PREDANI',
+    actionRecommendation,
     insufficientEvidence: bundle.facts.filter((f) => f.verificationStatus === 'VERIFIED').length < 2,
     reasoningTrace:
       'Verdikt OPATRNOSTI: výchozí poctivý stav při neúplných důkazech. Lepší opatrnost než nepodložená jistota.',
