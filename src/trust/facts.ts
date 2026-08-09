@@ -96,6 +96,17 @@ export function assertVerifiedFactsHaveEvidence(bundle: FactBundle): string[] {
   return errors;
 }
 
+/** Integrity: every EvidenceItem is referenced by at least one fact (no orphans). */
+export function assertNoOrphanEvidence(bundle: FactBundle): string[] {
+  const referenced = new Set<string>();
+  for (const f of bundle.facts) {
+    for (const id of f.evidenceIds || []) referenced.add(id);
+  }
+  return bundle.evidence
+    .filter((e) => !referenced.has(e.evidenceId))
+    .map((e) => `orphan ${e.evidenceId} (${e.type}/${e.source})`);
+}
+
 const SCAM_TEXT_MARKERS = [
   'kurýr',
   'kuryr',
@@ -313,13 +324,20 @@ export function buildFactBundle(input: {
   const scamTextMarkers = SCAM_TEXT_MARKERS.filter((m) => textCombined.includes(m));
   const educationalScamFraming = EDUCATIONAL_FRAMING.test(textCombined);
 
-  // Text markers as VERIFIED observation of input content (evidence = raw snippet), not proof of fraud
+  // Text markers as VERIFIED observation of input content (not proof of fraud).
+  // Both marker list and raw snippet attach to the same FACT (no orphan evidence).
   if (scamTextMarkers.length > 0) {
     const snippet = (input.rawText || input.userNote || input.url || '').slice(0, 200);
-    const e = nextE({
+    const eMarkers = nextE({
       type: 'user_input_text_markers',
       source: 'input_text_scan',
       value: scamTextMarkers.join('|'),
+      verificationStatus: 'VERIFIED',
+    });
+    const eSnippet = nextE({
+      type: 'user_input_snippet',
+      source: 'input_text_scan',
+      value: snippet,
       verificationStatus: 'VERIFIED',
     });
     nextF(
@@ -329,15 +347,8 @@ export function buildFactBundle(input: {
           : 'Samotné výskyty jsou SIGNAL, ne automatický důkaz, že jde o podvod.'),
       'input_text_scan',
       'VERIFIED',
-      [e]
+      [eMarkers, eSnippet]
     );
-    // Keep raw snippet as additional evidence for audit trail
-    nextE({
-      type: 'user_input_snippet',
-      source: 'input_text_scan',
-      value: snippet,
-      verificationStatus: 'VERIFIED',
-    });
   }
 
   /**

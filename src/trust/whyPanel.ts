@@ -18,7 +18,18 @@ export type InsufficientEvidenceKind =
   | 'CONFLICTING_EVIDENCE'
   | 'SIGNAL_ONLY';
 
-export type CheckUiStatus = 'OVERENO' | 'NEOVERENO' | 'SELHALO' | 'SIGNAL' | 'NEPROVEDENO';
+/**
+ * UI status for one check row.
+ * SELHALO = technical failure (could not complete / invalid result of the check itself).
+ * NALEZENA_SHODA = check ran successfully and found a hard match (e.g. phishing DB).
+ */
+export type CheckUiStatus =
+  | 'OVERENO'
+  | 'NALEZENA_SHODA'
+  | 'NEOVERENO'
+  | 'SELHALO'
+  | 'SIGNAL'
+  | 'NEPROVEDENO';
 
 export interface WhyCheckRow {
   id: string;
@@ -81,7 +92,7 @@ export function buildWhyPanel(factBundle: FactBundle, decision: RuleDecision): W
         label: 'Doména',
         icon: '🌐',
         status: 'OVERENO',
-        meaning: `Adresa odpovídá: ${factBundle.hostname}`,
+        meaning: `Doménu jsme rozpoznali (${factBundle.hostname}) a mohli ji kontrolovat.`,
         kind: 'INSUFFICIENT_EVIDENCE',
       })
     );
@@ -160,15 +171,15 @@ export function buildWhyPanel(factBundle: FactBundle, decision: RuleDecision): W
     );
   }
 
-  // Phishing
+  // Phishing — MATCH is successful detection, not technical failure (SELHALO)
   if (factBundle.phishingMatched) {
     checks.push(
       row({
         id: 'phishing',
         label: 'Phishing databáze',
         icon: '🎣',
-        status: 'SELHALO',
-        meaning: `Nalezena shoda s interní databází${factBundle.phishingPattern ? `: ${factBundle.phishingPattern}` : ''}.`,
+        status: 'NALEZENA_SHODA',
+        meaning: `Kontrola proběhla a našla shodu s interní databází${factBundle.phishingPattern ? `: ${factBundle.phishingPattern}` : ''}.`,
         kind: 'CONFLICTING_EVIDENCE',
       })
     );
@@ -239,7 +250,14 @@ export function buildWhyPanel(factBundle: FactBundle, decision: RuleDecision): W
 
   const verified = checks.filter((c) => c.status === 'OVERENO').map((c) => `${c.label}: ${c.meaning}`);
   const notVerified = checks
-    .filter((c) => c.status === 'NEOVERENO' || c.status === 'NEPROVEDENO' || c.status === 'SELHALO' || c.status === 'SIGNAL')
+    .filter(
+      (c) =>
+        c.status === 'NEOVERENO' ||
+        c.status === 'NEPROVEDENO' ||
+        c.status === 'SELHALO' ||
+        c.status === 'SIGNAL' ||
+        c.status === 'NALEZENA_SHODA'
+    )
     .map((c) => `${c.label}: ${c.meaning}`);
 
   const primaryKind: InsufficientEvidenceKind =

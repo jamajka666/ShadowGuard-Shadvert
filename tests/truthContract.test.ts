@@ -3,7 +3,12 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { assertVerifiedFactsHaveEvidence, buildFactBundle } from '../src/trust/facts.ts';
+import {
+  assertNoOrphanEvidence,
+  assertVerifiedFactsHaveEvidence,
+  buildFactBundle,
+} from '../src/trust/facts.ts';
+import { buildWhyPanel } from '../src/trust/whyPanel.ts';
 import { decideFromFacts } from '../src/trust/ruleEngine.ts';
 import { validateAiPresentation } from '../src/trust/aiOutputValidator.ts';
 import { mergeAnalysisResult, generalKnownServiceTips } from '../src/trust/mergeResult.ts';
@@ -326,10 +331,10 @@ describe('AI Output Validator kill switch', () => {
 });
 
 describe('P1 derived facts + server-owned claims', () => {
-  it('every VERIFIED fact has evidenceIds pointing to real evidence', () => {
+  it('every VERIFIED fact has evidenceIds; no orphan evidence (incl. text snippet)', () => {
     const facts = buildFactBundle({
       url: 'https://www.bazos.cz/x',
-      rawText: 'kolo',
+      rawText: 'Kurýr a zadejte číslo karty — test snippety',
       sslDomainInfo: {
         domain: 'www.bazos.cz',
         isSslValid: true,
@@ -338,16 +343,38 @@ describe('P1 derived facts + server-owned claims', () => {
       },
       phishingChecked: true,
     });
-    // cheap TLD host also
     const cheap = buildFactBundle({
       url: 'https://shop.xyz/',
       sslDomainInfo: { domain: 'shop.xyz', isSslValid: true },
       phishingChecked: true,
     });
     for (const b of [facts, cheap]) {
-      const errs = assertVerifiedFactsHaveEvidence(b);
-      assert.deepEqual(errs, [], errs.join('; '));
+      assert.deepEqual(assertVerifiedFactsHaveEvidence(b), [], 'verified→evidence');
+      assert.deepEqual(assertNoOrphanEvidence(b), [], 'no orphans');
     }
+    const scan = facts.facts.find((f) => f.source === 'input_text_scan');
+    assert.ok(scan);
+    assert.equal(scan!.evidenceIds?.length, 2);
+    assert.ok(facts.evidence.some((e) => e.type === 'user_input_snippet'));
+    assert.ok(facts.evidence.some((e) => e.type === 'user_input_text_markers'));
+  });
+
+  it('phishing match WhyPanel status is NALEZENA_SHODA not SELHALO', () => {
+    const facts = buildFactBundle({
+      url: 'https://zasilkovna-platba-cz.online/pay',
+      phishingChecked: true,
+      phishingMatched: true,
+      phishingKilled: true,
+      phishingPattern: 'Falešná Zásilkovna',
+    });
+    const decision = decideFromFacts(facts);
+    const why = buildWhyPanel(facts, { ...decision, actionAdvice: ['Nic neplaťte.'] });
+    const phish = why.checks.find((c) => c.id === 'phishing');
+    assert.ok(phish);
+    assert.equal(phish!.status, 'NALEZENA_SHODA');
+    assert.notEqual(phish!.status, 'SELHALO');
+    assert.match(phish!.meaning, /shod/i);
+    assert.equal(decision.safetyLevel, 'PODVOD');
   });
 
   it('domainAgeYears is DERIVED from creationDate fact', () => {

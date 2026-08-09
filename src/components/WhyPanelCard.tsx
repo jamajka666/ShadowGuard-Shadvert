@@ -13,16 +13,18 @@ interface WhyPanelCardProps {
 
 const STATUS_LABEL: Record<string, string> = {
   OVERENO: 'Ověřeno',
+  NALEZENA_SHODA: 'Nalezena shoda',
   NEOVERENO: 'Neověřeno',
-  SELHALO: 'Selhalo / riziko',
+  SELHALO: 'Kontrola selhala',
   SIGNAL: 'Varovný signál',
   NEPROVEDENO: 'Neproběhlo',
 };
 
 const STATUS_CLASS: Record<string, string> = {
   OVERENO: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+  NALEZENA_SHODA: 'text-rose-300 bg-rose-500/15 border-rose-400/40',
   NEOVERENO: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
-  SELHALO: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
+  SELHALO: 'text-slate-300 bg-slate-500/15 border-slate-400/40',
   SIGNAL: 'text-orange-300 bg-orange-500/10 border-orange-500/30',
   NEPROVEDENO: 'text-slate-400 bg-slate-500/10 border-slate-500/30',
 };
