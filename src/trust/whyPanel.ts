@@ -19,13 +19,17 @@ export type InsufficientEvidenceKind =
   | 'SIGNAL_ONLY';
 
 /**
- * UI status for one check row.
- * SELHALO = technical failure (could not complete / invalid result of the check itself).
- * NALEZENA_SHODA = check ran successfully and found a hard match (e.g. phishing DB).
+ * UI status for one check row (uniform semantics):
+ * OVERENO        — check completed, positive/neutral OK result
+ * NALEZENO       — check completed and found a problem / hard hit (NOT technical failure)
+ * NEOVERENO      — not enough evidence for this dimension
+ * SELHALO        — check could not be completed / probe crashed
+ * SIGNAL         — supporting warning signal only
+ * NEPROVEDENO    — check was never run
  */
 export type CheckUiStatus =
   | 'OVERENO'
-  | 'NALEZENA_SHODA'
+  | 'NALEZENO'
   | 'NEOVERENO'
   | 'SELHALO'
   | 'SIGNAL'
@@ -37,6 +41,8 @@ export interface WhyCheckRow {
   /** Short emoji/icon hint for simple UI */
   icon: string;
   status: CheckUiStatus;
+  /** Optional human badge override (e.g. "Nalezena shoda" for phishing) */
+  statusLabel?: string;
   /** Human: co to znamená */
   meaning: string;
   /** Internal classification (not shown as jargon to seniors by default) */
@@ -68,9 +74,7 @@ export interface WhyPanel {
   };
 }
 
-function row(
-  partial: Omit<WhyCheckRow, 'icon'> & { icon?: string }
-): WhyCheckRow {
+function row(partial: Omit<WhyCheckRow, 'icon'> & { icon?: string }): WhyCheckRow {
   return {
     icon: partial.icon || '•',
     ...partial,
@@ -135,7 +139,7 @@ export function buildWhyPanel(factBundle: FactBundle, decision: RuleDecision): W
     );
   }
 
-  // TLS
+  // TLS — invalid cert is a completed check with a negative finding (NALEZENO), not SELHALO
   if (factBundle.sslValid === true) {
     checks.push(
       row({
@@ -153,12 +157,15 @@ export function buildWhyPanel(factBundle: FactBundle, decision: RuleDecision): W
         id: 'https',
         label: 'HTTPS / certifikát',
         icon: '🔐',
-        status: 'SELHALO',
-        meaning: 'Certifikát je neplatný nebo nedůvěryhodný — to je varovný technický signál.',
-        kind: 'CHECK_FAILED',
+        status: 'NALEZENO',
+        statusLabel: 'Negativní nález',
+        meaning:
+          'Kontrola TLS proběhla: certifikát je neplatný nebo nedůvěryhodný. To je zjištění, ne technické selhání kontroly.',
+        kind: 'SIGNAL_ONLY',
       })
     );
   } else {
+    // Probe never produced a boolean result (not run / not measured)
     checks.push(
       row({
         id: 'https',
@@ -171,14 +178,15 @@ export function buildWhyPanel(factBundle: FactBundle, decision: RuleDecision): W
     );
   }
 
-  // Phishing — MATCH is successful detection, not technical failure (SELHALO)
+  // Phishing — hard match = completed check found a hit (NALEZENO), not SELHALO
   if (factBundle.phishingMatched) {
     checks.push(
       row({
         id: 'phishing',
         label: 'Phishing databáze',
         icon: '🎣',
-        status: 'NALEZENA_SHODA',
+        status: 'NALEZENO',
+        statusLabel: 'Nalezena shoda',
         meaning: `Kontrola proběhla a našla shodu s interní databází${factBundle.phishingPattern ? `: ${factBundle.phishingPattern}` : ''}.`,
         kind: 'CONFLICTING_EVIDENCE',
       })
@@ -256,11 +264,12 @@ export function buildWhyPanel(factBundle: FactBundle, decision: RuleDecision): W
         c.status === 'NEPROVEDENO' ||
         c.status === 'SELHALO' ||
         c.status === 'SIGNAL' ||
-        c.status === 'NALEZENA_SHODA'
+        c.status === 'NALEZENO'
     )
     .map((c) => `${c.label}: ${c.meaning}`);
 
   const primaryKind: InsufficientEvidenceKind =
+    checks.find((c) => c.kind === 'CONFLICTING_EVIDENCE')?.kind ||
     checks.find((c) => c.kind === 'CHECK_FAILED')?.kind ||
     checks.find((c) => c.kind === 'SIGNAL_ONLY')?.kind ||
     checks.find((c) => c.kind === 'NOT_CHECKED')?.kind ||
@@ -273,7 +282,7 @@ export function buildWhyPanel(factBundle: FactBundle, decision: RuleDecision): W
 
   const whyBlocks =
     decision.internalVerdict === 'NEVIME' || decision.insufficientEvidence
-      ? 'Chybí dostatek ověřených důkazů o prodejci, nabídce nebo některých kontrolách. Bez nich bychom lhalí, kdybychom řekli „je to bezpečné“.'
+      ? 'Chybí dostatek ověřených důkazů o prodejci, nabídce nebo některých kontrolách. Bez nich bychom lhali, kdybychom řekli „je to bezpečné“.'
       : decision.safetyLevel === 'OPATRNOSTI'
         ? 'Máme jen část obrázku: některé kontroly prošly, jiné chybí nebo jsou jen varovné signály. Síla tvrzení nesmí překročit sílu důkazu.'
         : decision.reasoningTrace;

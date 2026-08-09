@@ -110,7 +110,8 @@ export interface AdCheckResult {
       id: string;
       label: string;
       icon: string;
-      status: 'OVERENO' | 'NALEZENA_SHODA' | 'NEOVERENO' | 'SELHALO' | 'SIGNAL' | 'NEPROVEDENO';
+      status: 'OVERENO' | 'NALEZENO' | 'NEOVERENO' | 'SELHALO' | 'SIGNAL' | 'NEPROVEDENO';
+      statusLabel?: string;
       meaning: string;
       kind: string;
     }[];

@@ -5,7 +5,7 @@
 
 export const TRUTH_CONTRACT_VERSION = '1.0.1';
 /** Bump when rule mapping / kill thresholds change (invalidates verdict cache). */
-export const RULES_VERSION_TRUTH = 'rules-2026-08-09-truth-contract.7';
+export const RULES_VERSION_TRUTH = 'rules-2026-08-09-truth-contract.8';
 
 /** Internal analysis verdict before First Creation UI mapping. */
 export type InternalVerdict = 'DUVERYHODNE' | 'OPATRNOSTI' | 'PODVOD' | 'NEVIME';

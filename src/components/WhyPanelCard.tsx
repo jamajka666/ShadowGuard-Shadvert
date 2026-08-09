@@ -13,7 +13,7 @@ interface WhyPanelCardProps {
 
 const STATUS_LABEL: Record<string, string> = {
   OVERENO: 'Ověřeno',
-  NALEZENA_SHODA: 'Nalezena shoda',
+  NALEZENO: 'Nalezeno',
   NEOVERENO: 'Neověřeno',
   SELHALO: 'Kontrola selhala',
   SIGNAL: 'Varovný signál',
@@ -22,7 +22,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_CLASS: Record<string, string> = {
   OVERENO: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
-  NALEZENA_SHODA: 'text-rose-300 bg-rose-500/15 border-rose-400/40',
+  NALEZENO: 'text-rose-300 bg-rose-500/15 border-rose-400/40',
   NEOVERENO: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
   SELHALO: 'text-slate-300 bg-slate-500/15 border-slate-400/40',
   SIGNAL: 'text-orange-300 bg-orange-500/10 border-orange-500/30',
@@ -88,7 +88,7 @@ export function WhyPanelCard({ result, fontSize = 'normal' }: WhyPanelCardProps)
                       <span
                         className={`inline-block px-2 py-0.5 rounded-md border text-xs font-semibold ${STATUS_CLASS[c.status] || STATUS_CLASS.NEOVERENO}`}
                       >
-                        {STATUS_LABEL[c.status] || c.status}
+                        {c.statusLabel || STATUS_LABEL[c.status] || c.status}
                       </span>
                     </td>
                     <td className="p-2 text-slate-300 leading-snug">{c.meaning}</td>

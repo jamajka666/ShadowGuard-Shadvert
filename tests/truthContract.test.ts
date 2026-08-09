@@ -359,7 +359,7 @@ describe('P1 derived facts + server-owned claims', () => {
     assert.ok(facts.evidence.some((e) => e.type === 'user_input_text_markers'));
   });
 
-  it('phishing match WhyPanel status is NALEZENA_SHODA not SELHALO', () => {
+  it('phishing match WhyPanel is NALEZENO (completed finding), not SELHALO', () => {
     const facts = buildFactBundle({
       url: 'https://zasilkovna-platba-cz.online/pay',
       phishingChecked: true,
@@ -371,10 +371,56 @@ describe('P1 derived facts + server-owned claims', () => {
     const why = buildWhyPanel(facts, { ...decision, actionAdvice: ['Nic neplaťte.'] });
     const phish = why.checks.find((c) => c.id === 'phishing');
     assert.ok(phish);
-    assert.equal(phish!.status, 'NALEZENA_SHODA');
+    assert.equal(phish!.status, 'NALEZENO');
     assert.notEqual(phish!.status, 'SELHALO');
+    assert.equal(phish!.statusLabel, 'Nalezena shoda');
     assert.match(phish!.meaning, /shod/i);
     assert.equal(decision.safetyLevel, 'PODVOD');
+  });
+
+  it('invalid TLS is NALEZENO (negative finding), not SELHALO; missing TLS is NEPROVEDENO', () => {
+    const invalid = buildFactBundle({
+      url: 'https://bad-tls.example/',
+      sslDomainInfo: { domain: 'bad-tls.example', isSslValid: false },
+      phishingChecked: true,
+    });
+    const dInv = decideFromFacts(invalid);
+    const whyInv = buildWhyPanel(invalid, { ...dInv, actionAdvice: ['Buďte opatrní.'] });
+    const httpsInv = whyInv.checks.find((c) => c.id === 'https');
+    assert.ok(httpsInv);
+    assert.equal(httpsInv!.status, 'NALEZENO');
+    assert.notEqual(httpsInv!.status, 'SELHALO');
+    assert.equal(httpsInv!.statusLabel, 'Negativní nález');
+    assert.match(httpsInv!.meaning, /neplatn|nedůvěryhodn/i);
+
+    const missing = buildFactBundle({
+      url: 'https://example.com/',
+      // no sslDomainInfo → probe not measured
+      phishingChecked: true,
+    });
+    const dMiss = decideFromFacts(missing);
+    const whyMiss = buildWhyPanel(missing, { ...dMiss, actionAdvice: ['Buďte opatrní.'] });
+    const httpsMiss = whyMiss.checks.find((c) => c.id === 'https');
+    assert.ok(httpsMiss);
+    assert.equal(httpsMiss!.status, 'NEPROVEDENO');
+    assert.notEqual(httpsMiss!.status, 'SELHALO');
+  });
+
+  it('Czech copy uses lhali not lhalí', () => {
+    const facts = buildFactBundle({
+      url: 'https://example.com/',
+      sslDomainInfo: { domain: 'example.com', isSslValid: true },
+      phishingChecked: true,
+    });
+    const decision = decideFromFacts(facts);
+    const why = buildWhyPanel(facts, {
+      ...decision,
+      insufficientEvidence: true,
+      internalVerdict: 'NEVIME',
+      actionAdvice: ['Opatrně.'],
+    });
+    assert.doesNotMatch(why.structure.whyBlocksStrongerVerdict, /lhalí/);
+    assert.match(why.structure.whyBlocksStrongerVerdict, /lhali/);
   });
 
   it('domainAgeYears is DERIVED from creationDate fact', () => {
