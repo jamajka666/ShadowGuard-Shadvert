@@ -100,6 +100,31 @@ export interface AdCheckResult {
   groundingSources?: { title: string; url: string }[];
   evidenceFacts?: EvidenceFact[];
   unverifiedClaims?: string[];
+  /** Expandable "Proč?" panel — answers why we cannot claim more (Trust UX). */
+  whyPanel?: {
+    show: boolean;
+    title: string;
+    lead: string;
+    doesNotMean: string;
+    checks: {
+      id: string;
+      label: string;
+      icon: string;
+      status: 'OVERENO' | 'NEOVERENO' | 'SELHALO' | 'SIGNAL' | 'NEPROVEDENO';
+      meaning: string;
+      kind: string;
+    }[];
+    recommendations: string[];
+    primaryKind: string;
+    structure: {
+      verified: string[];
+      notVerified: string[];
+      whyBlocksStrongerVerdict: string;
+      doesNotMean: string;
+      recommend: string[];
+    };
+  };
+  noVerdictIsNotNoHelp?: boolean;
   reasoningTrace?: string;
   scoreBreakdown?: { label: string; delta: number }[];
   internalVerdict?: 'DUVERYHODNE' | 'OPATRNOSTI' | 'PODVOD' | 'NEVIME';

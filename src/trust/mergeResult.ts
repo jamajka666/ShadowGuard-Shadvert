@@ -11,6 +11,7 @@ import type { RuleDecision } from './ruleEngine';
 import { buildUnverifiedClaims, templatePresentation } from './ruleEngine';
 import type { AiPresentationPayload } from './aiOutputValidator';
 import { GENERAL_KNOWN_SERVICE_TIPS } from './truthContract';
+import { buildWhyPanel } from './whyPanel';
 
 export type VerdictSource =
   | 'phishing_kill'
@@ -129,6 +130,10 @@ export function mergeAnalysisResult(opts: {
   const summaryForSenior =
     useAi && ai.summaryForSenior ? String(ai.summaryForSenior) : tpl.summaryForSenior;
   const actionAdvice = tpl.actionAdvice;
+  const whyPanel = buildWhyPanel(
+    factBundle,
+    { ...decision, actionAdvice: tpl.actionAdvice }
+  );
 
   const riskFactors = buildRiskFactorsFromEngine(decision, factBundle);
   const positiveFactors = buildPositiveFactorsFromFacts(factBundle);
@@ -211,6 +216,9 @@ export function mergeAnalysisResult(opts: {
     trustScoreLabel: 'Interní skóre podle našich pravidel (ne procento bezpečnosti)',
     claimsPolicy:
       'Structured claims + actionAdvice are server-built from FACTS+rules only. AI may only phrase headline/summary after validation. PROKAZANO_OFICIALNI ≠ PROKAZANO_BEZPECNE.',
+    /** Trust UX: answers "A proč?" — NO-VERDICT ≠ NO-HELP */
+    whyPanel,
+    noVerdictIsNotNoHelp: true,
     isFallback: !useAi,
     rulesVersion: opts.rulesVersion,
     verdictSource: opts.verdictSource,

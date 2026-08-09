@@ -18,6 +18,8 @@ export interface RuleDecision {
   /** True when verdict is driven by insufficient evidence. */
   insufficientEvidence: boolean;
   reasoningTrace: string;
+  /** Server-owned safe next steps (also used by Why panel). */
+  actionAdvice?: string[];
 }
 
 function clampScore(n: number): number {
@@ -50,6 +52,11 @@ export function decideFromFacts(bundle: FactBundle): RuleDecision {
       insufficientEvidence: false,
       reasoningTrace:
         'Verdikt PODVOD: shoda s interní phishing databází (prokázaný důkaz). AI tento verdikt nesmí změkčit.',
+      actionAdvice: [
+        'Nic neplaťte a nezadávejte číslo karty.',
+        'Zavřete podezřelou stránku nebo zprávu.',
+        'Pokud už jste něco zadali, kontaktujte banku a někoho z rodiny.',
+      ],
     };
   }
 

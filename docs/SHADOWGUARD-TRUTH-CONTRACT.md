@@ -68,3 +68,23 @@ Separate workstream (not this PR): source integrity, evidence poisoning, parser 
 ## UI note
 
 Trust score = **internal score by our rules**, not “% safe”.
+
+## NEVÍME / OPATRNOSTI UX (NO-VERDICT ≠ NO-HELP)
+
+API always attaches `whyPanel` when explanation is needed:
+
+| Field | Purpose |
+|-------|---------|
+| `checks[]` | Table: kontrola / stav / co to znamená |
+| `doesNotMean` | Co z výsledku **nevyplývá** |
+| `recommendations[]` | Co teď bezpečně udělat |
+| `structure` | 5-part accountability: verified / notVerified / why / doesNotMean / recommend |
+
+UI: `WhyPanelCard` — expandable „Proč tento výsledek?“  
+Pravidlo: nikdy jen „nevíme“ — vždy proč + bezpečný další krok.
+
+## Gates before public demo
+
+1. Technical evidence integrity (PR #1 / truth-contract series)  
+2. **Trust & Accountability Gate** (logic + language + legal caution)  
+3. **Demo Gate** (3 scenarios: known host / phishing / unknown)

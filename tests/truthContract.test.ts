@@ -466,4 +466,37 @@ describe('P1 derived facts + server-owned claims', () => {
     assert.ok(tips.every((t) => /Můžete použít/i.test(t.description)));
     assert.ok(!tips.some((t) => /dlouhodobě známá|ověřená služba|bezpečná služba/i.test(t.description)));
   });
+
+  it('whyPanel answers "A proč?" with verified / not verified / recommend (NO-VERDICT ≠ NO-HELP)', () => {
+    const facts = buildFactBundle({
+      url: 'https://example.com/',
+      rawText: 'Nabídka elektroniky',
+      sslDomainInfo: { domain: 'example.com', isSslValid: true },
+      phishingChecked: true,
+    });
+    const decision = decideFromFacts(facts);
+    const merged = mergeAnalysisResult({
+      factBundle: facts,
+      decision,
+      ai: null,
+      aiAccepted: false,
+      verdictSource: 'hybrid_rules',
+      rulesVersion: 'test',
+    });
+    const why = merged.whyPanel as {
+      show: boolean;
+      checks: { status: string; label: string }[];
+      doesNotMean: string;
+      recommendations: string[];
+      structure: { verified: string[]; notVerified: string[]; recommend: string[] };
+    };
+    assert.equal(merged.noVerdictIsNotNoHelp, true);
+    assert.equal(why.show, true);
+    assert.ok(why.checks.some((c) => c.status === 'OVERENO'));
+    assert.ok(why.checks.some((c) => c.status === 'NEOVERENO' || c.status === 'NEPROVEDENO'));
+    assert.ok(why.doesNotMean.length > 20);
+    assert.ok(why.recommendations.length >= 1);
+    assert.ok(why.structure.verified.length >= 1);
+    assert.ok(why.structure.notVerified.length >= 1);
+  });
 });

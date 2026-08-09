@@ -31,6 +31,7 @@ import { EshopVisualTrustCard } from './EshopVisualTrustCard';
 import { SslDomainCard } from './SslDomainCard';
 import { TrustScoreGauge } from './TrustScoreGauge';
 import { EnergyAuraVisualizer } from './EnergyAuraVisualizer';
+import { WhyPanelCard } from './WhyPanelCard';
 import { UserCheck, Shield, FileCode, Terminal, AlertOctagon, CheckSquare, Layers, Download } from 'lucide-react';
 
 interface ResultDisplayProps {
@@ -400,6 +401,9 @@ ${result.inputUrl ? `Odkaz: ${result.inputUrl}` : ''}`;
           </div>
         </div>
       </div>
+
+      {/* Trust UX: "A proč?" — NO-VERDICT ≠ NO-HELP */}
+      <WhyPanelCard result={result} fontSize={fontSize} />
 
       {/* E-SHOP VISUAL TRUST ANALYSIS (WHEN SCREENSHOT ANALYZED) */}
       <EshopVisualTrustCard
