@@ -450,7 +450,10 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
         <PermissionCheck
           themeMode={themeMode}
           className="mb-6 animate-in fade-in"
-          onClose={() => setShowPermissionCheck(false)}
+          onClose={() => {
+            setShowPermissionCheck(false);
+            setMicPermissionDenied(false);
+          }}
           onPermissionGranted={() => {
             setShowPermissionCheck(false);
             setMicPermissionDenied(false);
