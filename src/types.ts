@@ -157,6 +157,10 @@ export interface ScamAlertsResponse {
   lastUpdated: string;
   groundingSources?: { title: string; url: string }[];
   isLiveGrounding?: boolean;
+  cached?: boolean;
+  cacheSource?: string;
+  stale?: boolean;
+  errorNote?: string;
 }
 
 export interface PredefinedScenario {

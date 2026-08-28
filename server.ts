@@ -1315,11 +1315,51 @@ function cleanAndParseJson<T = any>(rawText: string): T {
   }
 }
 
-// P1-2: in-memory cache for scam alerts (cuts Gemini cost / abuse)
+// P1-2: in-memory cache for scam alerts (cuts Gemini cost / abuse).
+// Serve last-known (or static fallback) immediately; refresh Gemini in the background.
+// Previously the HTTP request waited up to 12s and then only cached the error for 5 min,
+// so every user after TTL paid the timeout again.
 const SCAM_ALERTS_TTL_MS = Number(process.env.SCAM_ALERTS_CACHE_TTL_MS) || 30 * 60 * 1000;
-const SCAM_ALERTS_ERROR_TTL_MS = Number(process.env.SCAM_ALERTS_ERROR_CACHE_TTL_MS) || 5 * 60 * 1000;
-const SCAM_ALERTS_TIMEOUT_MS = Number(process.env.SCAM_ALERTS_TIMEOUT_MS) || 12_000;
-let scamAlertsCache: { payload: unknown; expiresAt: number; source: string } | null = null;
+const SCAM_ALERTS_ERROR_TTL_MS = Number(process.env.SCAM_ALERTS_ERROR_CACHE_TTL_MS) || 30 * 60 * 1000;
+const SCAM_ALERTS_TIMEOUT_MS = Number(process.env.SCAM_ALERTS_TIMEOUT_MS) || 8_000;
+const SCAM_ALERTS_STALE_MS = Number(process.env.SCAM_ALERTS_STALE_MS) || 24 * 60 * 60 * 1000;
+
+type ScamAlertsPayload = {
+  alerts: unknown;
+  lastUpdated: string;
+  isLiveGrounding: boolean;
+  cached: boolean;
+  cacheSource: string;
+  groundingSources?: { title: string; url: string }[];
+  errorNote?: string;
+  stale?: boolean;
+};
+
+type ScamAlertsCache = {
+  payload: ScamAlertsPayload;
+  expiresAt: number;
+  source: string;
+  fetchedAt: number;
+};
+
+function fallbackScamAlertsPayload(source: string, extra: Partial<ScamAlertsPayload> = {}): ScamAlertsPayload {
+  return {
+    alerts: fallbackScamAlerts,
+    lastUpdated: 'čeká na živé vyhledání',
+    isLiveGrounding: false,
+    cached: source !== 'warming',
+    cacheSource: source,
+    ...extra,
+  };
+}
+
+let scamAlertsCache: ScamAlertsCache | null = {
+  payload: fallbackScamAlertsPayload('fallback'),
+  expiresAt: 0, // force a background refresh on first request
+  source: 'fallback',
+  fetchedAt: Date.now(),
+};
+let scamAlertsRefresh: Promise<void> | null = null;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -1337,48 +1377,29 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
-// API Endpoint for Live Google Search Grounded Scam Alerts
-app.get('/api/scam-alerts', heavyLimiter, async (req, res) => {
+function rememberScamAlerts(payload: ScamAlertsPayload, ttlMs: number, source: string) {
+  scamAlertsCache = {
+    payload,
+    expiresAt: Date.now() + ttlMs,
+    source,
+    fetchedAt: Date.now(),
+  };
+}
+
+async function refreshScamAlertsInBackground(): Promise<void> {
+  const ai = getGeminiClient();
+  if (!ai) {
+    rememberScamAlerts(fallbackScamAlertsPayload('no-key'), Math.min(SCAM_ALERTS_TTL_MS, 10 * 60 * 1000), 'no-key');
+    return;
+  }
+
   try {
-    if (scamAlertsCache && scamAlertsCache.expiresAt > Date.now()) {
-      res.setHeader('X-Cache', 'HIT');
-      res.setHeader('X-Cache-Source', scamAlertsCache.source);
-      // mark as cached for clients without changing alerts content
-      const body =
-        scamAlertsCache.payload && typeof scamAlertsCache.payload === 'object'
-          ? { ...(scamAlertsCache.payload as object), cached: true, cacheSource: scamAlertsCache.source }
-          : scamAlertsCache.payload;
-      return res.json(body);
-    }
-
-    const ai = getGeminiClient();
-
-    if (!ai) {
-      const payload = {
-        alerts: fallbackScamAlerts,
-        lastUpdated: new Date().toLocaleDateString('cs-CZ'),
-        isLiveGrounding: false,
-        cached: false,
-        cacheSource: 'no-key',
-      };
-      scamAlertsCache = {
-        payload,
-        expiresAt: Date.now() + Math.min(SCAM_ALERTS_TTL_MS, 10 * 60 * 1000),
-        source: 'no-key',
-      };
-      res.setHeader('X-Cache', 'MISS-FALLBACK');
-      return res.json(payload);
-    }
-
-    const systemInstruction = buildScamAlertsSystemInstruction();
-    const promptText = buildScamAlertsUserPrompt();
-
     const response = await withTimeout(
       ai.models.generateContent({
         model: 'gemini-3.6-flash',
-        contents: promptText,
+        contents: buildScamAlertsUserPrompt(),
         config: {
-          systemInstruction,
+          systemInstruction: buildScamAlertsSystemInstruction(),
           tools: [{ googleSearch: {} }],
           responseMimeType: 'application/json',
           responseSchema: {
@@ -1412,24 +1433,24 @@ app.get('/api/scam-alerts', heavyLimiter, async (req, res) => {
     );
 
     const text = response.text;
-    if (text) {
-      const parsed = cleanAndParseJson(text);
+    if (!text) {
+      rememberScamAlerts(fallbackScamAlertsPayload('empty'), Math.min(SCAM_ALERTS_TTL_MS, 10 * 60 * 1000), 'empty');
+      return;
+    }
 
-      // Extract search grounding sources
-      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-      const groundingSources: { title: string; url: string }[] = [];
-      if (chunks && Array.isArray(chunks)) {
-        for (const chunk of chunks) {
-          if (chunk.web?.uri && chunk.web?.title) {
-            groundingSources.push({
-              title: chunk.web.title,
-              url: chunk.web.uri,
-            });
-          }
+    const parsed = cleanAndParseJson(text);
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    const groundingSources: { title: string; url: string }[] = [];
+    if (chunks && Array.isArray(chunks)) {
+      for (const chunk of chunks) {
+        if (chunk.web?.uri && chunk.web?.title) {
+          groundingSources.push({ title: chunk.web.title, url: chunk.web.uri });
         }
       }
+    }
 
-      const payload = {
+    rememberScamAlerts(
+      {
         alerts: parsed.alerts || fallbackScamAlerts,
         lastUpdated: new Date().toLocaleDateString('cs-CZ', {
           day: 'numeric',
@@ -1440,45 +1461,59 @@ app.get('/api/scam-alerts', heavyLimiter, async (req, res) => {
         }),
         groundingSources: groundingSources.length > 0 ? groundingSources : undefined,
         isLiveGrounding: true,
-        cached: false,
+        cached: true,
         cacheSource: 'live',
-      };
-      scamAlertsCache = { payload, expiresAt: Date.now() + SCAM_ALERTS_TTL_MS, source: 'live' };
-      res.setHeader('X-Cache', 'MISS');
-      res.setHeader('X-Cache-Source', 'live');
-      return res.json(payload);
-    }
-
-    const payload = {
-      alerts: fallbackScamAlerts,
-      lastUpdated: new Date().toLocaleDateString('cs-CZ'),
-      isLiveGrounding: false,
-      cached: false,
-      cacheSource: 'empty',
-    };
-    scamAlertsCache = {
-      payload,
-      expiresAt: Date.now() + Math.min(SCAM_ALERTS_TTL_MS, 10 * 60 * 1000),
-      source: 'empty',
-    };
-    res.setHeader('X-Cache', 'MISS-EMPTY');
-    return res.json(payload);
+      },
+      SCAM_ALERTS_TTL_MS,
+      'live'
+    );
   } catch (err: any) {
-    console.warn('Scam alerts search grounding failed, returning fallback alerts:', err?.message || err);
-    const payload = {
-      alerts: fallbackScamAlerts,
-      lastUpdated: new Date().toLocaleDateString('cs-CZ'),
-      isLiveGrounding: false,
-      cached: false,
-      cacheSource: 'error',
-      errorNote: 'Živá varování teď nejsou dostupná — ukazujeme ověřený lokální seznam.',
-    };
-    // short cache on failure to avoid hammering Gemini (still serves users fast on next hit)
-    scamAlertsCache = { payload, expiresAt: Date.now() + SCAM_ALERTS_ERROR_TTL_MS, source: 'error' };
-    res.setHeader('X-Cache', 'MISS-ERROR');
-    res.setHeader('X-Cache-Source', 'error');
-    return res.json(payload);
+    console.warn('Scam alerts search grounding failed, keeping last-known list:', err?.message || err);
+    // Keep last live/fallback payload — only push the next retry further out.
+    if (scamAlertsCache && (scamAlertsCache.source === 'live' || scamAlertsCache.source === 'fallback')) {
+      scamAlertsCache.expiresAt = Date.now() + SCAM_ALERTS_ERROR_TTL_MS;
+      return;
+    }
+    rememberScamAlerts(
+      fallbackScamAlertsPayload('error', {
+        errorNote: 'Živá varování teď nejsou dostupná — ukazujeme ověřený lokální seznam.',
+      }),
+      SCAM_ALERTS_ERROR_TTL_MS,
+      'error'
+    );
   }
+}
+
+function scheduleScamAlertsRefresh() {
+  if (scamAlertsRefresh) return;
+  scamAlertsRefresh = refreshScamAlertsInBackground().finally(() => {
+    scamAlertsRefresh = null;
+  });
+}
+
+// API Endpoint for Live Google Search Grounded Scam Alerts
+app.get('/api/scam-alerts', heavyLimiter, async (_req, res) => {
+  const now = Date.now();
+  const fresh = scamAlertsCache && scamAlertsCache.expiresAt > now ? scamAlertsCache : null;
+  const stale =
+    !fresh &&
+    scamAlertsCache &&
+    now - scamAlertsCache.fetchedAt < SCAM_ALERTS_STALE_MS
+      ? scamAlertsCache
+      : null;
+
+  if (!fresh) {
+    scheduleScamAlertsRefresh();
+  }
+
+  const entry = fresh || stale || scamAlertsCache;
+  const payload: ScamAlertsPayload = entry
+    ? { ...entry.payload, cached: true, cacheSource: entry.source, stale: !fresh }
+    : fallbackScamAlertsPayload('warming');
+
+  res.setHeader('X-Cache', fresh ? 'HIT' : stale ? 'STALE' : 'MISS-FALLBACK');
+  res.setHeader('X-Cache-Source', payload.cacheSource);
+  return res.json(payload);
 });
 
 // Vite / Static setup

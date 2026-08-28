@@ -36,20 +36,25 @@ export const ScamAlertsSection: React.FC<ScamAlertsSectionProps> = ({
   const fetchAlerts = async () => {
     setLoading(true);
     setError(null);
+    const controller = new AbortController();
+    const abortTimer = window.setTimeout(() => controller.abort(), 6000);
     try {
-      const response = await fetch('/api/scam-alerts');
+      const response = await fetch('/api/scam-alerts', { signal: controller.signal });
       if (!response.ok) {
         throw new Error('Chyba při načítání aktuálních varování');
       }
       const json: ScamAlertsResponse = await response.json();
       setData(json);
       if (json.alerts && json.alerts.length > 0) {
-        setExpandedId(json.alerts[0].id);
+        setExpandedId((prev) => prev ?? json.alerts[0].id);
       }
     } catch (err: any) {
       console.error('Failed to fetch scam alerts:', err);
-      setError('Nepodařilo se načíst živé zprávy o podvodech. Zkontrolujte připojení.');
+      if (!data) {
+        setError('Nepodařilo se načíst živé zprávy o podvodech. Zkontrolujte připojení.');
+      }
     } finally {
+      window.clearTimeout(abortTimer);
       setLoading(false);
     }
   };
@@ -57,6 +62,12 @@ export const ScamAlertsSection: React.FC<ScamAlertsSectionProps> = ({
   useEffect(() => {
     fetchAlerts();
   }, []);
+
+  useEffect(() => {
+    if (!data || data.isLiveGrounding || !data.stale) return;
+    const retry = window.setTimeout(fetchAlerts, 2500);
+    return () => window.clearTimeout(retry);
+  }, [data?.isLiveGrounding, data?.stale]);
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -82,7 +93,7 @@ export const ScamAlertsSection: React.FC<ScamAlertsSectionProps> = ({
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/50 text-rose-300 text-xs font-mono font-black uppercase">
                 <ShieldAlert className="w-3.5 h-3.5" />
-                <span>Živá bezpečnostní hlídka ČR</span>
+                <span>{data?.isLiveGrounding ? 'Aktuální bezpečnostní hlídka ČR' : 'Ověřený bezpečnostní přehled ČR'}</span>
               </span>
 
               {data?.isLiveGrounding && (
@@ -97,7 +108,9 @@ export const ScamAlertsSection: React.FC<ScamAlertsSectionProps> = ({
               <span>Aktuální varování před podvody v ČR</span>
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 mt-1">
-              Aplikace vyhledává nejnovější hrozby, falešné e-shopy a podvodné triky na online bazarech v ČR přes živý vyhledávač Google.
+              {data?.isLiveGrounding
+                ? 'Přehled vychází z aktuálního vyhledávání důvěryhodných zdrojů.'
+                : 'Živé vyhledávání se právě obnovuje; mezitím zobrazujeme ověřený základní přehled.'}
             </p>
           </div>
         </div>
@@ -144,6 +157,12 @@ export const ScamAlertsSection: React.FC<ScamAlertsSectionProps> = ({
         <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-800 text-rose-200 text-sm flex items-center gap-3 mb-4">
           <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {data?.errorNote && (
+        <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/50 text-amber-100 text-sm mb-4">
+          {data.errorNote}
         </div>
       )}
 
@@ -274,7 +293,7 @@ export const ScamAlertsSection: React.FC<ScamAlertsSectionProps> = ({
       {/* Footer info timestamp */}
       {data?.lastUpdated && (
         <div className="mt-4 text-right text-[11px] text-slate-500 font-mono">
-          Poslední aktualizace hrozeb: {data.lastUpdated}
+          {data.isLiveGrounding ? 'Živé vyhledání: ' : 'Stav přehledu: '}{data.lastUpdated}
         </div>
       )}
     </div>

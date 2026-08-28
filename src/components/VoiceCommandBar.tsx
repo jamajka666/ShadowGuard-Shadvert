@@ -37,6 +37,7 @@ interface VoiceCommandBarProps {
 }
 
 export const VoiceCommandBar: React.FC<VoiceCommandBarProps> = ({ handlers, themeMode }) => {
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [lastCommand, setLastCommand] = useState<MatchedCommandResult | null>(null);
@@ -66,6 +67,16 @@ export const VoiceCommandBar: React.FC<VoiceCommandBarProps> = ({ handlers, them
   useEffect(() => {
     refreshDiagnostics();
   }, []);
+
+  useEffect(() => {
+    const openPanel = () => setIsPanelOpen(true);
+    window.addEventListener('shadowguard:voice-controls', openPanel);
+    return () => window.removeEventListener('shadowguard:voice-controls', openPanel);
+  }, []);
+
+  useEffect(() => {
+    if (isPanelOpen) document.getElementById('voice-controls')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [isPanelOpen]);
 
   useEffect(() => {
     return () => {
@@ -202,9 +213,12 @@ export const VoiceCommandBar: React.FC<VoiceCommandBarProps> = ({ handlers, them
   const isDenied = diagnostics?.permissionState === 'denied';
   const isInsecure = diagnostics && !diagnostics.isSecureContext;
 
+  if (!isPanelOpen && !isListening) return null;
+
   return (
     <>
       <div
+        id="voice-controls"
         className={`w-full border-b transition-all ${
           isListening
             ? isShadowGuard

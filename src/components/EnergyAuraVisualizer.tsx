@@ -62,7 +62,7 @@ export const EnergyAuraVisualizer: React.FC<EnergyAuraVisualizerProps> = ({
         {variant === 'red' ? (
           <>
             <Flame className="w-4 h-4 text-rose-500 animate-bounce" />
-            <span className="text-rose-400 font-black">OHNI VÝSTRAHA - VYSOKÉ RIZIKO</span>
+            <span className="text-rose-400 font-black">OHNIVÁ VÝSTRAHA - VYSOKÉ RIZIKO</span>
           </>
         ) : variant === 'gold' ? (
           <>

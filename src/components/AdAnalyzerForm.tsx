@@ -5,8 +5,6 @@ import { PredefinedScenario, SSLDomainInfo, ThemeMode, AdCheckResult, UserRoleMo
 import { checkPhishingUrl } from '../utils/phishingValidator';
 import { SslDomainCard } from './SslDomainCard';
 import { PermissionCheck } from './PermissionCheck';
-import { ShadowGuardHeroBanner } from './ShadowGuardHeroBanner';
-import { ScamAlertsSection } from './ScamAlertsSection';
 import { UserSafetyScoreWidget } from './UserSafetyScoreWidget';
 import { stopSpeech } from '../utils/tts';
 import { checkMicDiagnostics } from '../utils/micPermissions';
@@ -366,13 +364,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 1) Úvodní info s názvem — oba režimy */}
-      <ShadowGuardHeroBanner
-        themeMode={themeMode}
-        onOpenMicGuide={() => setShowPermissionCheck(true)}
-      />
-
-      {/* 2) Kontrola inzerátu — hned po úvodu (Senior i Expert) */}
+      {/* Kontrola inzerátu je první obsah na hlavní stránce. */}
       <div
         className={`rounded-3xl p-6 sm:p-8 shadow-2xl border transition-all ${
           isShadowGuard
@@ -981,10 +973,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
       </div>
     </div>
 
-    {/* 3) Aktuální varování — po formuláři (oba režimy) */}
-    <ScamAlertsSection themeMode={themeMode} fontSize={fontSize} />
-
-    {/* 4) Expert: týdenní skóre až na konci bloku (Senior: skryté — méně šumu) */}
+    {/* Detailní režim: týdenní skóre až na konci bloku. */}
     {isExpert && <UserSafetyScoreWidget history={history} themeMode={themeMode} />}
     </div>
   );

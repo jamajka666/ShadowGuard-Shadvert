@@ -115,14 +115,14 @@ export const SslDomainCard: React.FC<SslDomainCardProps> = ({
               ? 'bg-slate-900/80 border-slate-800'
               : isContrast
               ? 'bg-black border-yellow-400'
-              : 'bg-slate-50 border-slate-200'
+            : 'bg-slate-900 border-slate-600 text-slate-100'
           }`}
         >
           <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">
             <Lock className="w-4 h-4 text-cyan-400" />
             <span>Vydavatel SSL:</span>
           </div>
-          <div className="font-bold text-sm sm:text-base text-slate-100 truncate">
+          <div className="font-bold text-sm sm:text-base text-white truncate">
             {info.sslIssuer || 'Neznámý'}
           </div>
           {info.sslValidTo && (
@@ -142,14 +142,14 @@ export const SslDomainCard: React.FC<SslDomainCardProps> = ({
               ? 'bg-slate-900/80 border-slate-800'
               : isContrast
               ? 'bg-black border-yellow-400'
-              : 'bg-slate-50 border-slate-200'
+            : 'bg-slate-900 border-slate-600 text-slate-100'
           }`}
         >
           <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">
             <Calendar className="w-4 h-4 text-emerald-400" />
             <span>Stáří domény:</span>
           </div>
-          <div className="font-black text-sm sm:text-base text-slate-100">
+          <div className="font-black text-sm sm:text-base text-white">
             {info.domainAgeText || (info.domainAgeYears ? `${info.domainAgeYears} let` : 'Nezjištěno')}
           </div>
           {info.creationDate && (
@@ -166,14 +166,14 @@ export const SslDomainCard: React.FC<SslDomainCardProps> = ({
               ? 'bg-slate-900/80 border-slate-800'
               : isContrast
               ? 'bg-black border-yellow-400'
-              : 'bg-slate-50 border-slate-200'
+            : 'bg-slate-900 border-slate-600 text-slate-100'
           }`}
         >
           <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">
             <Building className="w-4 h-4 text-amber-400" />
             <span>Registrátor:</span>
           </div>
-          <div className="font-bold text-sm sm:text-base text-slate-100 truncate">
+          <div className="font-bold text-sm sm:text-base text-white truncate">
             {info.registrar || 'Ověřený registrátor'}
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
@@ -188,14 +188,14 @@ export const SslDomainCard: React.FC<SslDomainCardProps> = ({
               ? 'bg-slate-900/80 border-slate-800'
               : isContrast
               ? 'bg-black border-yellow-400'
-              : 'bg-slate-50 border-slate-200'
+            : 'bg-slate-900 border-slate-600 text-slate-100'
           }`}
         >
           <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">
             <Server className="w-4 h-4 text-purple-400" />
             <span>Server IP & Lokalita:</span>
           </div>
-          <div className="font-mono font-bold text-sm sm:text-base text-slate-100 truncate">
+          <div className="font-mono font-bold text-sm sm:text-base text-white truncate">
             {info.ipAddress || 'Zjišťuje se...'}
           </div>
           <div className="text-[11px] text-slate-400 mt-1">

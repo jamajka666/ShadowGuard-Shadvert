@@ -287,12 +287,6 @@ export default function App() {
         onClose={() => setToastLevel(null)}
       />
 
-      {/* Soft optional stats e-mail (weekly default, dismissible — never auto-sends) */}
-      <StatsEmailPromptBanner
-        history={history}
-        variant={isSimpleMode || themeMode === 'classic' ? 'light' : 'dark'}
-      />
-
       {isSimpleMode && (
         <div
           className="w-full border-b px-4 py-2.5 text-center text-sm sm:text-base"
@@ -336,6 +330,11 @@ export default function App() {
             setIsSendToSonOpen(true);
           }}
           onOpenInstallPwa={() => setIsInstallPwaOpen(true)}
+          onOpenGuide={() => setActiveTab('guide')}
+          onOpenQuiz={() => setActiveTab('quiz')}
+          onOpenVoiceControls={() => {
+            document.getElementById('voice-controls')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }}
         />
       ) : (
         <header
@@ -371,6 +370,7 @@ export default function App() {
 
       {/* Main Navigation Tabs */}
       <nav
+        aria-hidden="true"
         className={`border-b transition-colors sticky top-0 z-20 backdrop-blur-md shadow-md ${
           isSimpleMode
             ? ''
@@ -379,7 +379,7 @@ export default function App() {
             : isContrast
             ? 'bg-slate-900 border-yellow-400 text-white'
             : 'bg-[#121214]/95 border-[#B8860B]/40 text-slate-100 shadow-[0_4px_20px_rgba(184,134,11,0.15)]'
-        }`}
+        } hidden`}
         style={
           isSimpleMode
             ? { background: calmTokens.cardBg, borderColor: calmTokens.border, color: calmTokens.text }
@@ -606,6 +606,8 @@ export default function App() {
 
                 {!isSimpleMode && <FamilySettingsCard />}
 
+                {!isSimpleMode && <ScamAlertsSection themeMode={themeMode} fontSize={uiFontSize} />}
+
                 {/* Expert only on home: historie/analýzy na konci (Senior: méně šumu) */}
                 {!isSimpleMode && userRoleMode === 'expert' && history.length > 0 && (
                   <HistoryList
@@ -704,14 +706,8 @@ export default function App() {
             </span>
             <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
           </p>
-          {!isSimpleMode && (
-            <p className="text-slate-500">
-              AI Google Gemini · <a href="/admin" className="text-cyan-600 hover:underline">Admin</a>
-            </p>
-          )}
+          {!isSimpleMode && <p className="text-slate-500">Pomáhá chránit celou rodinu</p>}
         </div>
-        {/* Lab only on First Creation — simple closed beta stays calm */}
-        {!isSimpleMode && <DesignLabFooter themeMode={themeMode} />}
       </footer>
     </div>
   );

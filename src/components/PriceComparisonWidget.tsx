@@ -114,7 +114,7 @@ export const PriceComparisonWidget: React.FC<PriceComparisonWidgetProps> = ({
               ? 'bg-slate-900 text-cyan-300 border-cyan-500/40 hover:bg-slate-800'
               : isContrast
               ? 'bg-yellow-400 text-black border-yellow-500 font-black'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300'
+            : 'bg-slate-800 text-white hover:bg-slate-700 border-slate-500'
           }`}
         >
           <HelpCircle className="w-4 h-4 text-amber-500" />
@@ -178,7 +178,7 @@ export const PriceComparisonWidget: React.FC<PriceComparisonWidgetProps> = ({
                   ? 'bg-slate-900 border-slate-700 text-white focus:ring-cyan-500'
                   : isContrast
                   ? 'bg-black border-yellow-400 text-white focus:ring-yellow-400'
-                  : 'bg-slate-50 border-slate-300 text-slate-900 focus:ring-emerald-500'
+                  : 'bg-slate-900 border-slate-500 text-white placeholder-slate-400 focus:ring-emerald-500'
               }`}
             />
           </div>

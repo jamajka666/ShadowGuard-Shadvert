@@ -9,7 +9,6 @@ interface WelcomeSplashProps {
 
 export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onDone }) => {
   const [visible, setVisible] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
     try {
@@ -18,15 +17,7 @@ export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onDone }) => {
       /* ignore */
     }
     setVisible(true);
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReduceMotion(mq.matches);
   }, []);
-
-  useEffect(() => {
-    if (!visible) return;
-    const t = setTimeout(() => dismiss(), 4500);
-    return () => clearTimeout(t);
-  }, [visible]);
 
   const dismiss = () => {
     try {
@@ -52,22 +43,7 @@ export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onDone }) => {
       </button>
 
       <div className="relative w-full max-w-md mx-4 text-center">
-        {!reduceMotion && (
-          <video
-            className="absolute inset-0 w-full h-full object-cover rounded-3xl opacity-40 pointer-events-none"
-            src="/brand/splash.mp4"
-            poster="/brand/logo-shadvert.png"
-            autoPlay
-            muted
-            playsInline
-            loop={false}
-            onError={(e) => {
-              (e.target as HTMLVideoElement).style.display = 'none';
-            }}
-          />
-        )}
-
-        <div className="relative z-10 rounded-3xl border-2 border-[#D4A017]/60 bg-[#121214]/90 p-8 shadow-[0_0_60px_rgba(212,160,23,0.35)]">
+        <div className="relative z-10 rounded-3xl border-2 border-[#D4A017]/60 bg-[#121214] p-7 shadow-[0_0_60px_rgba(212,160,23,0.35)]">
           <div className="mx-auto mb-5 w-28 h-28 rounded-2xl overflow-hidden border border-[#CD7F32]/50 shadow-[0_0_25px_rgba(0,245,255,0.25)] bg-black">
             <img
               src="/brand/logo-shadvert.png"
@@ -91,6 +67,15 @@ export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onDone }) => {
           <p className="text-slate-300 text-sm mt-3 leading-relaxed">
             Ochrana před falešnými inzeráty a podvodnými e-shopy. Pro tátu i celou rodinu.
           </p>
+
+          <div className="mt-5 rounded-2xl border border-slate-700 bg-[#1C1C1E] p-4 text-left text-sm leading-relaxed text-slate-200">
+            <p className="mb-2 font-black text-[#F5D061]">Jak to funguje</p>
+            <ol className="list-decimal space-y-1 pl-5">
+              <li>Vložte odkaz, text zprávy nebo fotku inzerátu.</li>
+              <li>Klepněte na „Prověřit důvěryhodnost“.</li>
+              <li>Řiďte se zeleným, žlutým nebo červeným výsledkem.</li>
+            </ol>
+          </div>
 
           <button
             type="button"
