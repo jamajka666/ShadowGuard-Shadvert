@@ -256,11 +256,11 @@ export const HistoryList: React.FC<HistoryListProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto flex-wrap">
+        <div className="flex flex-col gap-2 w-full self-start sm:w-auto sm:flex-row sm:items-center sm:flex-wrap sm:justify-end">
           <button
             type="button"
             onClick={() => setShowChart(!showChart)}
-            className={`text-xs font-bold flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all ${
+            className={`text-xs font-bold flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border transition-all ${
               showChart
                 ? 'bg-[#00F5FF]/20 text-[#00F5FF] border-[#00F5FF]/60'
                 : 'bg-[#1C1C1E] text-slate-300 border-slate-800 hover:text-white'
@@ -277,7 +277,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
             onClick={() => {
               void exportCsv();
             }}
-            className={`text-xs font-bold flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shadow-sm ${
+            className={`text-xs font-bold flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl transition-all shadow-sm ${
               isCyber
                 ? 'bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 cyber-button-glow'
                 : isContrast
@@ -293,7 +293,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
           <button
             type="button"
             onClick={sendStatsEmail}
-            className={`text-xs font-bold flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shadow-sm border ${
+            className={`text-xs font-bold flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl transition-all shadow-sm border ${
               isCyber
                 ? 'bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border-sky-500/40'
                 : isContrast
@@ -309,7 +309,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
           <button
             type="button"
             onClick={onClearHistory}
-            className={`text-xs font-bold flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-colors ${
+            className={`text-xs font-bold flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border transition-colors ${
               isCyber
                 ? 'text-rose-400 hover:bg-rose-950/40 border-rose-500/40'
                 : isContrast
