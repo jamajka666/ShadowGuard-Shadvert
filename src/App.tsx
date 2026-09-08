@@ -538,7 +538,7 @@ export default function App() {
       </nav>
 
       {/* Main Content Area */}
-      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-10 flex-1">
+      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-4 sm:py-10 flex-1">
         {activeTab === 'analyzer' && (
           <div>
             {isLoading ? (
@@ -706,8 +706,16 @@ export default function App() {
             </span>
             <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
           </p>
-          {!isSimpleMode && <p className="text-slate-500">Pomáhá chránit celou rodinu</p>}
+          {!isSimpleMode && (
+            <p className="text-slate-500">
+              Pomáhá chránit celou rodinu ·{' '}
+              <a href="/admin" className="text-cyan-600 hover:underline">
+                Přihlásit jako Admin
+              </a>
+            </p>
+          )}
         </div>
+        {!isSimpleMode && <DesignLabFooter themeMode={themeMode} />}
       </footer>
     </div>
   );
