@@ -1,0 +1,6 @@
+[Unit]
+Description=ShadowGuard health watchdog (one-shot)
+
+[Service]
+Type=oneshot
+ExecStart=/home/jamajka/projekty/moje-app/scripts/shadvert-watchdog.sh

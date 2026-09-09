@@ -127,8 +127,10 @@ Environment=NODE_ENV=production
 Environment=PATH=/home/jamajka/.nvm/versions/node/v20.20.2/bin:/usr/bin:/bin
 EnvironmentFile=/home/jamajka/projekty/moje-app/.env.local
 ExecStart=/home/jamajka/.nvm/versions/node/v20.20.2/bin/node /home/jamajka/projekty/moje-app/dist/server.cjs
-Restart=on-failure
+Restart=always
 RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=10
 
 [Install]
 WantedBy=default.target
@@ -145,8 +147,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStart=/home/jamajka/.local/bin/cloudflared tunnel --config /home/jamajka/.cloudflared/config.yml run shadowguard
-Restart=on-failure
+Restart=always
 RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=10
 
 [Install]
 WantedBy=default.target
@@ -156,6 +160,16 @@ WantedBy=default.target
 systemctl --user daemon-reload
 systemctl --user enable --now shadvert.service cloudflared-shadvert.service
 loginctl enable-linger $USER   # běží i po odhlášení (PC musí být zapnuté)
+
+Lenovo **nesmí usínat** (jinak tunnel i Gemini z telefonu visí). Jednou:
+
+```bash
+chmod +x scripts/disable-sleep-on-ac.sh scripts/install-watchdog-timer.sh scripts/shadvert-watchdog.sh
+./scripts/disable-sleep-on-ac.sh
+./scripts/install-watchdog-timer.sh
+```
+
+BIOS: **Restore on AC / Power on after power loss**. Dálkový restart z FORT: `docs/REMOTE-FORT.md`.
 ```
 
 ## 7. Tablet / telefon (rodina)
@@ -213,6 +227,7 @@ Pro rodinu vždy používej **named tunnel** + doménu.
 | Apex timeout, www OK | Smaž A/AAAA parking u `@` v CF DNS, znovu `tunnel route dns` |
 | Gemini chyby | Klíč v `.env.local`, restart `shadvert.service` |
 | Starý obsah na telefonu | Admin → Force update / smazat data webu v Chrome |
+| Kontrola visí / „offline Gemini“ | Lenovo spí nebo tunnel padl. Nespát na AC; Admin → Stav Lenova → Restart; viz `docs/REMOTE-FORT.md` |
 
 ## Bezpečnost
 
@@ -220,4 +235,4 @@ Pro rodinu vždy používej **named tunnel** + doménu.
 - `ADMIN_TOKEN` a `FAMILY_CODE` sdílej jen v rodině; při prozrazení rotuj
 - `~/.cloudflared/*.json` a `cert.pem` jsou tajné
 - Doména má HTTPS od Cloudflare automaticky
-- PC vypnutý / spánek = web offline
+- PC vypnutý / spánek = web offline — na AC nespát (`scripts/disable-sleep-on-ac.sh`)

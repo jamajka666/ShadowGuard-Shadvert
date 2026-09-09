@@ -1,9 +1,12 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import tls from 'tls';
 import dns from 'dns';
 import crypto from 'crypto';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createServer as createViteServer } from 'vite';
@@ -54,6 +57,15 @@ const MAX_USER_NOTE_CHARS = Number(process.env.MAX_USER_NOTE_CHARS) || 2000;
 
 type VerdictCacheEntry = { payload: unknown; expiresAt: number };
 const verdictCache = new Map<string, VerdictCacheEntry>();
+const execFileAsync = promisify(execFile);
+
+async function userSystemctl(...args: string[]): Promise<{ stdout: string; stderr: string }> {
+  const { stdout, stderr } = await execFileAsync('systemctl', ['--user', ...args], {
+    timeout: 20000,
+    env: process.env,
+  });
+  return { stdout: (stdout || '').trim(), stderr: (stderr || '').trim() };
+}
 
 function verdictCacheKey(url: string, rawText: string, userNote: string, hasImage: boolean): string {
   const raw = `${RULES_VERSION}|${url.trim().toLowerCase()}|${rawText.trim()}|${userNote.trim()}|img:${hasImage ? 1 : 0}`;
@@ -519,6 +531,54 @@ app.post('/api/family/force-reload', (req, res) => {
   }
   saveFamilyDb(db);
   res.json({ ok: true, forceReloadAt: db.forceReloadAt });
+});
+
+app.get('/api/admin/host-status', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  let appUnit = 'unknown';
+  let tunnelUnit = 'unknown';
+  try {
+    appUnit = (await userSystemctl('is-active', 'shadvert.service')).stdout || 'unknown';
+  } catch {
+    appUnit = 'inactive';
+  }
+  try {
+    tunnelUnit = (await userSystemctl('is-active', 'cloudflared-shadvert.service')).stdout || 'unknown';
+  } catch {
+    tunnelUnit = 'inactive';
+  }
+  res.json({
+    ok: true,
+    hostname: os.hostname(),
+    uptimeSec: Math.round(os.uptime()),
+    loadavg: os.loadavg()[0],
+    appVersion: APP_VERSION,
+    geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    appUnit,
+    tunnelUnit,
+    time: new Date().toISOString(),
+  });
+});
+
+app.post('/api/admin/host/restart', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const target = String(req.body?.target || '');
+  if (target !== 'app' && target !== 'tunnel' && target !== 'both') {
+    return res.status(400).json({ error: 'target musí být app, tunnel nebo both' });
+  }
+  const bounceApp = target === 'app' || target === 'both';
+  const bounceTunnel = target === 'tunnel' || target === 'both';
+  res.json({ ok: true, target, note: bounceApp ? 'App se restartuje za okamžik — obnovte stránku.' : 'Tunnel se restartuje.' });
+  setTimeout(() => {
+    void (async () => {
+      try {
+        if (bounceTunnel) await userSystemctl('restart', 'cloudflared-shadvert.service');
+        if (bounceApp) await userSystemctl('restart', 'shadvert.service');
+      } catch (err) {
+        console.warn('host restart failed', err);
+      }
+    })();
+  }, 400);
 });
 
 app.get('/api/health', (_req, res) => {

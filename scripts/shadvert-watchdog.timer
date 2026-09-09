@@ -1,0 +1,11 @@
+[Unit]
+Description=ShadowGuard health watchdog every 2 minutes
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=120s
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

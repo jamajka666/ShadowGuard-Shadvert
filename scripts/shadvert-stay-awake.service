@@ -1,0 +1,13 @@
+[Unit]
+Description=ShadowGuard — block suspend/idle so the tunnel stays up
+After=default.target
+
+[Service]
+Type=simple
+# Blocks sleep and idle; display can still blank.
+ExecStart=/usr/bin/systemd-inhibit --what=sleep:idle --who=Shadvert --why="Shadvert Cloudflare tunnel must stay online" --mode=block /usr/bin/sleep infinity
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

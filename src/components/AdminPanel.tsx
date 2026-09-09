@@ -10,6 +10,7 @@ import {
   WifiOff,
   Clock,
   FolderOpen,
+  Server,
 } from 'lucide-react';
 
 interface DeviceRow {
@@ -35,6 +36,18 @@ interface HistoryRow {
   inputUrl?: string;
   deviceLabel: string;
   receivedAt: number;
+}
+
+interface HostStatus {
+  ok: boolean;
+  hostname?: string;
+  uptimeSec?: number;
+  loadavg?: number;
+  appVersion?: string;
+  geminiConfigured?: boolean;
+  appUnit?: string;
+  tunnelUnit?: string;
+  time?: string;
 }
 
 interface ExportRow {
@@ -68,6 +81,7 @@ export const AdminPanel: React.FC = () => {
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [hideBots, setHideBots] = useState(true);
+  const [host, setHost] = useState<HostStatus | null>(null);
 
   const authHeaders = useCallback(
     () => ({
@@ -83,10 +97,11 @@ export const AdminPanel: React.FC = () => {
     setError('');
     try {
       const q = hideBots ? '?hideBots=1' : '?hideBots=0';
-      const [dRes, hRes, eRes] = await Promise.all([
+      const [dRes, hRes, eRes, hostRes] = await Promise.all([
         fetch(`/api/family/devices${q}`, { headers: authHeaders() }),
         fetch('/api/family/history', { headers: authHeaders() }),
         fetch('/api/family/exports', { headers: authHeaders() }),
+        fetch('/api/admin/host-status', { headers: authHeaders() }),
       ]);
       if (!dRes.ok || !hRes.ok) {
         setError('Neplatný token nebo chyba serveru');
@@ -102,6 +117,9 @@ export const AdminPanel: React.FC = () => {
       if (eRes.ok) {
         const eData = await eRes.json();
         setExportsList(eData.exports || []);
+      }
+      if (hostRes.ok) {
+        setHost(await hostRes.json());
       }
     } catch {
       setError('Nelze se připojit k serveru');
@@ -131,6 +149,29 @@ export const AdminPanel: React.FC = () => {
     setDevices([]);
     setHistory([]);
     setExportsList([]);
+  };
+
+  const restartHost = async (target: 'app' | 'tunnel' | 'both') => {
+    const labels = { app: 'aplikaci', tunnel: 'tunnel', both: 'aplikaci i tunnel' };
+    if (!confirm(`Restartovat ${labels[target]} na Lenovu? Stránka může na chvíli spadnout.`)) return;
+    setMsg('');
+    setError('');
+    try {
+      const res = await fetch('/api/admin/host/restart', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ target }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMsg(data.note || 'Restart odeslán.');
+      } else {
+        setError('Restart selhal (token / server).');
+      }
+    } catch {
+      setMsg('Restart odeslán. Obnovte stránku za 5–10 s.');
+    }
+    setTimeout(() => void load(), 8000);
   };
 
   const forceReload = async () => {
@@ -236,6 +277,54 @@ export const AdminPanel: React.FC = () => {
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-8">
         {error && <p className="text-rose-400 text-sm font-bold">{error}</p>}
         {msg && <p className="text-emerald-400 text-sm font-bold">{msg}</p>}
+
+        {host && (
+          <section className="rounded-2xl border border-[#CD7F32]/40 bg-[#121214] p-4">
+            <h2 className="font-black text-lg flex items-center gap-2 mb-3">
+              <Server className="w-5 h-5 text-[#D4A017]" />
+              Stav Lenova
+            </h2>
+            <p className="text-sm text-slate-300">
+              <span className="font-bold">{host.hostname}</span>
+              {' · '}uptime {formatAge((host.uptimeSec || 0) * 1000)}
+              {' · '}v{host.appVersion}
+              {' · '}Gemini {host.geminiConfigured ? 'klíč OK' : 'CHYBÍ'}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              app: <span className={host.appUnit === 'active' ? 'text-emerald-400' : 'text-rose-400'}>{host.appUnit}</span>
+              {' · '}tunnel:{' '}
+              <span className={host.tunnelUnit === 'active' ? 'text-emerald-400' : 'text-rose-400'}>{host.tunnelUnit}</span>
+              {host.time ? ` · ${new Date(host.time).toLocaleString('cs-CZ')}` : ''}
+            </p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => void restartHost('tunnel')}
+                className="px-3 py-2 rounded-xl bg-slate-800 text-xs font-bold"
+              >
+                Restart tunnel
+              </button>
+              <button
+                type="button"
+                onClick={() => void restartHost('app')}
+                className="px-3 py-2 rounded-xl bg-slate-800 text-xs font-bold"
+              >
+                Restart app
+              </button>
+              <button
+                type="button"
+                onClick={() => void restartHost('both')}
+                className="px-3 py-2 rounded-xl bg-amber-800 text-xs font-black"
+              >
+                Restart obojí
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+              Z FORT 1: otevři tuto stránku přes internet. Když Lenovo spí nebo je vypnuté, sem se nedostaneš —
+              proto musí zůstat zapnuté (ne usínat).
+            </p>
+          </section>
+        )}
 
         <p className="text-xs text-slate-500 leading-relaxed">
           Online = heartbeat do {Math.round(onlineWindowMs / 60000)} min. Každé zařízení musí mít v appce

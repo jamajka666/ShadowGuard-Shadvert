@@ -125,6 +125,7 @@ export default function App() {
 
   // Loading & Result state
   const [isLoading, setIsLoading] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState('');
   const [currentResult, setCurrentResult] = useState<AdCheckResult | null>(null);
   const [toastLevel, setToastLevel] = useState<AdCheckResult['safetyLevel'] | null>(null);
   const [toastHeadline, setToastHeadline] = useState<string>('');
@@ -160,18 +161,32 @@ export default function App() {
     setIsLoading(true);
     setCurrentResult(null);
     setToastLevel(null);
+    setAnalyzeError('');
 
     try {
       const startTime = Date.now();
-      const response = await fetch('/api/analyze-ad', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
+      const ac = new AbortController();
+      const kill = setTimeout(() => ac.abort(), 28000);
+      let response: Response;
+      try {
+        response = await fetch('/api/analyze-ad', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data),
+          signal: ac.signal,
+        });
+      } finally {
+        clearTimeout(kill);
+      }
 
-      const resData = await response.json();
+      let resData: { error?: string } & AdCheckResult;
+      try {
+        resData = await response.json();
+      } catch {
+        throw new Error('bad-json');
+      }
 
       // First Creation keeps 10s scan; simple closed-beta uses shorter wait (less fatigue)
       const elapsedTime = Date.now() - startTime;
@@ -181,8 +196,7 @@ export default function App() {
       }
 
       if (resData.error) {
-        alert(resData.error);
-        setIsLoading(false);
+        setAnalyzeError(resData.error);
         return;
       }
 
@@ -197,7 +211,12 @@ export default function App() {
       void syncHistoryItem(resultObj);
     } catch (err) {
       console.error('Error analyzing ad:', err);
-      alert('Při prověřování inzerátu došlo k chybě. Zkontrolujte prosím připojení.');
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      setAnalyzeError(
+        offline
+          ? 'Telefon je teď bez internetu. Připojte se a zkuste kontrolu znovu.'
+          : 'Server Shadvert teď neodpovídá (Lenovo nebo tunnel). Není to chyba Gemini v telefonu — kontrola běží na PC doma. Zkuste to za chvíli, v Adminu restartujte služby, nebo níže použijte ukázkové inzeráty.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -591,6 +610,22 @@ export default function App() {
               )
             ) : (
               <div>
+                {analyzeError && (
+                  <div
+                    role="alert"
+                    className="mb-4 rounded-2xl border-2 border-rose-500/70 bg-rose-950/70 px-4 py-3 text-sm text-rose-100"
+                  >
+                    <p className="font-black">Kontrola se nedokončila</p>
+                    <p className="mt-1 leading-relaxed">{analyzeError}</p>
+                    <button
+                      type="button"
+                      className="mt-2 text-xs font-bold underline"
+                      onClick={() => setAnalyzeError('')}
+                    >
+                      Zavřít
+                    </button>
+                  </div>
+                )}
                 <AdAnalyzerForm
                   onAnalyze={handleAnalyze}
                   isLoading={isLoading}
