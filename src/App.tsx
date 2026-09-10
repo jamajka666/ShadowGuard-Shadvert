@@ -166,18 +166,24 @@ export default function App() {
     try {
       const startTime = Date.now();
       const ac = new AbortController();
-      // Phone/mobile data + screenshot upload + Gemini often needs > 30 s.
+      // Roaming / CZ mobile data + photo + Gemini can take a minute.
       const kill = setTimeout(() => ac.abort(), 120000);
-      let response: Response;
-      try {
-        response = await fetch('/api/analyze-ad', {
+      const postAnalyze = () =>
+        fetch('/api/analyze-ad', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
           signal: ac.signal,
         });
+      let response: Response;
+      try {
+        try {
+          response = await postAnalyze();
+        } catch (first) {
+          if (ac.signal.aborted) throw first;
+          await new Promise((r) => setTimeout(r, 1200));
+          response = await postAnalyze();
+        }
       } finally {
         clearTimeout(kill);
       }

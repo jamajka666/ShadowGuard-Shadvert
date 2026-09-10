@@ -8,7 +8,7 @@ import crypto from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
@@ -138,26 +138,27 @@ app.use(
 // JSON body: 2mb default; analyze with images still needs headroom but not unbounded 10mb abuse
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '2mb' }));
 
-const apiLimiter = rateLimit({
+const limiterCommon = {
   windowMs: 15 * 60 * 1000,
-  max: Number(process.env.RATE_LIMIT_API_MAX) || 200,
-  standardHeaders: true,
+  standardHeaders: true as const,
   legacyHeaders: false,
+  keyGenerator: rateLimitKey,
+  validate: { xForwardedForHeader: false, trustProxy: false },
+};
+const apiLimiter = rateLimit({
+  ...limiterCommon,
+  max: Number(process.env.RATE_LIMIT_API_MAX) || 200,
   message: { error: 'Příliš mnoho požadavků. Zkuste to prosím za chvíli.' },
 });
 const heavyLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: Number(process.env.RATE_LIMIT_HEAVY_MAX) || 40,
-  standardHeaders: true,
-  legacyHeaders: false,
+  ...limiterCommon,
+  max: Number(process.env.RATE_LIMIT_HEAVY_MAX) || 80,
   message: { error: 'Příliš mnoho kontrol najednou. Počkejte chvíli a zkuste znovu.' },
 });
 /** FAM-001 interim: stricter limit on family write endpoints (brute-force FAMILY_CODE). */
 const familyWriteLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  ...limiterCommon,
   max: Number(process.env.RATE_LIMIT_FAMILY_WRITE_MAX) || 30,
-  standardHeaders: true,
-  legacyHeaders: false,
   message: { error: 'Příliš mnoho pokusů o rodinný přístup. Počkejte chvíli a zkuste znovu.' },
 });
 /** Failed FAMILY_CODE attempts → temporary lockout per IP (in-memory). */
@@ -172,17 +173,35 @@ const FAMILY_LOCKOUT_MS = Number(process.env.FAMILY_LOCKOUT_MS) || 15 * 60 * 100
  * Default: socket remoteAddress only.
  */
 const TRUST_PROXY =
-  process.env.TRUST_PROXY === '1' || String(process.env.TRUST_PROXY || '').toLowerCase() === 'true';
+  process.env.TRUST_PROXY === '1' ||
+  String(process.env.TRUST_PROXY || '').toLowerCase() === 'true' ||
+  // Cloudflare Tunnel is the only hop when we bind localhost.
+  HOST === '127.0.0.1';
+
+if (TRUST_PROXY) {
+  // One trusted hop: cloudflared → 127.0.0.1. Number 1, not `true` (that would trust any XFF).
+  app.set('trust proxy', 1);
+}
+
+function rateLimitKey(req: express.Request): string {
+  const cf = req.headers['cf-connecting-ip'];
+  const ip =
+    typeof cf === 'string' && cf.trim()
+      ? cf.trim()
+      : req.ip || req.socket.remoteAddress || 'unknown';
+  return ipKeyGenerator(ip);
+}
 
 function clientIp(req: express.Request): string {
   if (TRUST_PROXY) {
+    const cf = req.headers['cf-connecting-ip'];
+    if (typeof cf === 'string' && cf.trim()) return cf.trim();
+    const realIp = req.headers['x-real-ip'];
+    if (typeof realIp === 'string' && realIp.trim()) return realIp.trim();
     const xf = req.headers['x-forwarded-for'];
     if (typeof xf === 'string' && xf.length) {
-      // Left-most = original client when proxy appends; only use when proxy is trusted
       return xf.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
     }
-    const realIp = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'];
-    if (typeof realIp === 'string' && realIp.trim()) return realIp.trim();
   }
   return req.socket.remoteAddress || 'unknown';
 }

@@ -172,8 +172,18 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
       canvas.height = video.videoHeight || 480;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        const maxEdge = 1280;
+        let w = canvas.width;
+        let h = canvas.height;
+        if (w > maxEdge || h > maxEdge) {
+          const scale = Math.min(maxEdge / w, maxEdge / h);
+          w = Math.round(w * scale);
+          h = Math.round(h * scale);
+          canvas.width = w;
+          canvas.height = h;
+        }
+        ctx.drawImage(video, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
         setImageBase64(dataUrl);
         setImagePreviewName(
           cameraTargetMode === 'eshop' ? 'screenshot_eshopu.jpg' : 'fotka_inzeratu.jpg'
@@ -299,6 +309,38 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
     );
   };
 
+  const compressImageFile = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const maxEdge = 1280;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxEdge || h > maxEdge) {
+          const scale = Math.min(maxEdge / w, maxEdge / h);
+          w = Math.round(w * scale);
+          h = Math.round(h * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('canvas'));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.78));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('image'));
+      };
+      img.src = objectUrl;
+    });
+
   // Handle image upload
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -307,14 +349,15 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
         setErrorMsg('Obrázek je příliš velký. Zvolte prosím soubor menší než 8 MB.');
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setImageBase64(result);
-        setImagePreviewName(file.name);
-        setErrorMsg('');
-      };
-      reader.readAsDataURL(file);
+      void compressImageFile(file)
+        .then((dataUrl) => {
+          setImageBase64(dataUrl);
+          setImagePreviewName(file.name);
+          setErrorMsg('');
+        })
+        .catch(() => {
+          setErrorMsg('Obrázek se nepodařilo načíst. Zkuste jinou fotku, nebo vložte odkaz.');
+        });
     }
   };
 
