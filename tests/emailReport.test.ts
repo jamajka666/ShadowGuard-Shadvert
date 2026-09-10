@@ -146,6 +146,7 @@ describe('mapSwatchIdToLookOption', () => {
     assert.equal(mapSwatchIdToLookOption('fc-cyber'), 'Jak to je teď (tmavé cyber)');
     assert.equal(mapSwatchIdToLookOption('calm-green'), 'Světlé s klidnou zelenou');
     assert.equal(mapSwatchIdToLookOption('warm-gold'), 'Teplé zlaté / pískové');
+    assert.equal(mapSwatchIdToLookOption('guard-shield'), 'Tmavé, ale klidnější');
     assert.equal(mapSwatchIdToLookOption('unknown-id'), null);
   });
 });

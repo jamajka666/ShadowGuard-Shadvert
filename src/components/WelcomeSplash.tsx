@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Shield, X } from 'lucide-react';
 
-const SPLASH_KEY = 'sg_splash_seen_v1';
+const SPLASH_KEY = 'sg_splash_seen_v2';
+const LOGO_MS = 2500;
+
+type Phase = 'logo' | 'guide';
 
 interface WelcomeSplashProps {
   onDone?: () => void;
 }
 
 export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onDone }) => {
-  const [visible, setVisible] = useState(false);
+  const [phase, setPhase] = useState<Phase | null>(null);
 
   useEffect(() => {
     try {
@@ -16,8 +19,14 @@ export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onDone }) => {
     } catch {
       /* ignore */
     }
-    setVisible(true);
+    setPhase('logo');
   }, []);
+
+  useEffect(() => {
+    if (phase !== 'logo') return;
+    const t = window.setTimeout(() => setPhase('guide'), LOGO_MS);
+    return () => window.clearTimeout(t);
+  }, [phase]);
 
   const dismiss = () => {
     try {
@@ -25,11 +34,32 @@ export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onDone }) => {
     } catch {
       /* ignore */
     }
-    setVisible(false);
+    setPhase(null);
     onDone?.();
   };
 
-  if (!visible) return null;
+  if (!phase) return null;
+
+  if (phase === 'logo') {
+    return (
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-[#050a0c]"
+        role="img"
+        aria-label="ShadowGuard Initiative představuje Shadvert"
+        onClick={() => setPhase('guide')}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') setPhase('guide');
+        }}
+        tabIndex={0}
+      >
+        <img
+          src="/brand/splash-initiative.png"
+          alt="ShadowGuard Initiative představuje Shadvert"
+          className="max-h-full max-w-full w-auto h-auto object-contain pointer-events-none select-none"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm">

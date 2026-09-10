@@ -409,6 +409,7 @@ export function mapSwatchIdToLookOption(swatchId: string): string | null {
     'dark-blue': 'Tmavé, ale klidnější',
     'midnight-amber': 'Tmavé, ale klidnější',
     'stealth-green': 'Tmavé, ale klidnější',
+    'guard-shield': 'Tmavé, ale klidnější',
     'warm-gold': 'Teplé zlaté / pískové',
     sand: 'Teplé zlaté / pískové',
     'high-contrast': 'Tmavé, ale klidnější',

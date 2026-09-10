@@ -18,9 +18,11 @@ export type ColorSwatch = {
   accent: string;
   text: string;
   note: string;
+  /** Optional mockup image — shown instead of the mini color chip. */
+  preview?: string;
 };
 
-/** 15 simple CSS “how it could look” chips — including unexpected combos */
+/** Lab “how it could look” chips — including unexpected combos + mockup previews */
 export const COLOR_SWATCHES: ColorSwatch[] = [
   {
     id: 'fc-cyber',
@@ -31,6 +33,17 @@ export const COLOR_SWATCHES: ColorSwatch[] = [
     accent: '#22d3ee',
     text: '#e2e8f0',
     note: 'Cyber dark + cyan — to, co teď běží',
+  },
+  {
+    id: 'guard-shield',
+    name: 'Strážný štít',
+    tag: 'návrh UI',
+    bg: '#07110e',
+    card: '#0d1a16',
+    accent: '#2ee6a6',
+    text: '#e8fff6',
+    note: 'Nové logo + čtyři obrazovky — budoucí vzhled, zatím jen náhled (app se nemění)',
+    preview: '/brand/look-strazny-stit.png',
   },
   {
     id: 'calm-green',
@@ -355,7 +368,8 @@ function SwatchModal({
           <div>
             <h2 className="text-base font-bold text-white">Vzorkovnice barev</h2>
             <p className="text-xs text-slate-400">
-              15 nápadů — kliknutím označíte favorita a propsání do dotazníku (vzhled appky se nemění)
+              {COLOR_SWATCHES.length} nápadů — kliknutím označíte favorita a propsání do dotazníku (vzhled appky se
+              nemění)
             </p>
           </div>
           <button type="button" onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:bg-slate-800" aria-label="Zavřít">
@@ -369,9 +383,23 @@ function SwatchModal({
               type="button"
               onClick={() => vote(s)}
               className={`text-left rounded-xl border overflow-hidden transition ${
+                s.preview ? 'sm:col-span-2' : ''
+              } ${
                 picked === s.id ? 'border-emerald-400 ring-2 ring-emerald-500/40' : 'border-slate-700 hover:border-slate-500'
               }`}
             >
+              {s.preview ? (
+                <div className="bg-black">
+                  <div className="px-3 py-2 bg-slate-900 border-b border-slate-800">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-400">{s.tag}</div>
+                    <div className="text-sm font-bold text-slate-100 flex items-center gap-1">
+                      {picked === s.id && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                      {s.name}
+                    </div>
+                  </div>
+                  <img src={s.preview} alt={s.name} className="w-full h-auto object-contain" />
+                </div>
+              ) : (
               <div className="p-3" style={{ background: s.bg }}>
                 <div
                   className="rounded-lg p-3 shadow-sm"
@@ -394,6 +422,7 @@ function SwatchModal({
                   </div>
                 </div>
               </div>
+              )}
               <div className="px-3 py-2 bg-slate-900 flex items-start justify-between gap-2">
                 <div>
                   <div className="text-sm font-bold text-slate-100 flex items-center gap-1">
