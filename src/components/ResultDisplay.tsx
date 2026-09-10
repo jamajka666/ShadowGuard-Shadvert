@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { AdCheckResult, ThemeMode, UserRoleMode } from '../types';
 import { speakText, stopSpeech } from '../utils/tts';
+import { isIOS, isStandalonePwa } from '../utils/platform';
 import { AlternativeSuggestions } from './AlternativeSuggestions';
 import { PriceComparisonWidget } from './PriceComparisonWidget';
 import { SuspiciousKeywordsHighlighter } from './SuspiciousKeywordsHighlighter';
@@ -135,26 +136,36 @@ ${result.inputUrl ? `Odkaz: ${result.inputUrl}` : ''}`;
     }
   };
 
-  // Direct WhatsApp Share
-  const handleWhatsAppShare = () => {
+  const verdictShareText = () => {
     const safetyBadge =
       result.safetyLevel === 'PODVOD'
         ? '🛑 PRAVDĚPODOBNÝ PODVOD / VYSOKÉ RIZIKO'
         : result.safetyLevel === 'OPATRNOSTI'
         ? '🟡 ZVÝŠENÁ OPATRNOST'
         : '🟢 BEZPEČNÝ INZERÁT';
+    return (
+      `Bezpečnostní prověrka inzerátu (Shadvert)\n\n` +
+      `Stav: ${safetyBadge}\n` +
+      `Název: ${result.headline}\n` +
+      `Skóre důvěry: ${result.trustScore}/100\n\n` +
+      `Srozumitelné poučení: ${result.summaryForSenior}\n\n` +
+      (result.inputUrl ? `Odkaz na inzerát: ${result.inputUrl}\n\n` : '') +
+      `Odesláno z aplikace ShadowGuard Shadvert`
+    );
+  };
 
-    const textToShare =
-      `*Bezpečnostní prověrka inzerátu (Strážce Inzerátů)*\n\n` +
-      `*Stav:* ${safetyBadge}\n` +
-      `*Název:* ${result.headline}\n` +
-      `*Skóre důvěry:* ${result.trustScore}/100\n\n` +
-      `*Srozumitelné poučení:* ${result.summaryForSenior}\n\n` +
-      (result.inputUrl ? `*Odkaz na inzerát:* ${result.inputUrl}\n\n` : '') +
-      `_Odesláno z aplikace Strážce Inzerátů_`;
+  const handleWhatsAppShare = () => {
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(verdictShareText())}`;
+    if (isStandalonePwa()) {
+      window.location.href = whatsappUrl;
+    } else {
+      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
 
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(textToShare)}`;
-    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+  const handleSmsShare = () => {
+    const delimiter = isIOS() ? '&' : '?';
+    window.location.href = `sms:${delimiter}body=${encodeURIComponent(verdictShareText())}`;
   };
 
   const textClasses = {
@@ -284,13 +295,12 @@ ${result.inputUrl ? `Odkaz: ${result.inputUrl}` : ''}`;
             </div>
           </div>
 
-          {/* Action buttons (Audio readout + WhatsApp + Send to Son) */}
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {/* Audio Readout */}
+          {/* Action buttons (Audio + WhatsApp + SMS + Send to Son) */}
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full lg:w-auto shrink-0">
             <button
               type="button"
               onClick={handleSpeak}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold shadow-lg transition-all ${
+              className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-bold shadow-lg transition-all w-full sm:w-auto ${
                 isSpeaking
                   ? 'bg-rose-600 text-white animate-pulse shadow-[0_0_20px_rgba(225,29,72,0.6)]'
                   : isCyber
@@ -304,28 +314,40 @@ ${result.inputUrl ? `Odkaz: ${result.inputUrl}` : ''}`;
               <span>{isSpeaking ? 'Zastavit čtení' : 'Přečíst nahlas'}</span>
             </button>
 
-            {/* DIRECT WHATSAPP SHARE BUTTON */}
             <button
               type="button"
               onClick={handleWhatsAppShare}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-black shadow-lg transition-all border ${
+              className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-black shadow-lg transition-all border w-full sm:w-auto ${
                 isCyber
                   ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400/50 shadow-[0_0_20px_rgba(16,185,129,0.4)]'
                   : isContrast
                   ? 'bg-yellow-400 text-black border-yellow-500'
                   : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500'
               }`}
-              title="Poslat varování nebo výsledek prověrky přes WhatsApp rodině"
+              title="Poslat výsledek prověrky přes WhatsApp"
             >
               <MessageCircle className="w-5 h-5 text-white" />
-              <span>💬 SDÍLET PŘES WHATSAPP</span>
+              <span>WhatsApp</span>
             </button>
 
-            {/* SEND TO SON BUTTON */}
+            <button
+              type="button"
+              onClick={handleSmsShare}
+              className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-black shadow-lg transition-all border w-full sm:w-auto ${
+                isContrast
+                  ? 'bg-yellow-400 text-black border-yellow-500'
+                  : 'bg-sky-700 hover:bg-sky-600 text-white border-sky-400/40'
+              }`}
+              title="Poslat výsledek prověrky SMS"
+            >
+              <MessageSquare className="w-5 h-5" />
+              <span>SMS</span>
+            </button>
+
             <button
               type="button"
               onClick={onOpenSendToSon}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-black shadow-lg transition-all border ${
+              className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-black shadow-lg transition-all border w-full sm:w-auto ${
                 isCyber
                   ? 'bg-gradient-to-r from-cyan-600 to-blue-700 hover:from-cyan-500 hover:to-blue-600 text-white border-cyan-400/50 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
                   : isContrast
@@ -334,7 +356,7 @@ ${result.inputUrl ? `Odkaz: ${result.inputUrl}` : ''}`;
               }`}
             >
               <Send className="w-5 h-5" />
-              <span>📱 SYNOVI NA TELEFON</span>
+              <span>Synovi</span>
             </button>
           </div>
         </div>
@@ -452,7 +474,7 @@ ${result.inputUrl ? `Odkaz: ${result.inputUrl}` : ''}`;
             ? 'bg-slate-950 border-slate-800 text-slate-200'
             : isContrast
             ? 'bg-black border-yellow-400 text-white'
-            : 'bg-white border-slate-200'
+            : 'bg-[#121214] border-slate-700 text-slate-100'
         }`}>
           <h3 className="text-lg font-black mb-4 text-rose-500 flex items-center gap-2 border-b border-slate-800 pb-2">
             <ShieldAlert className="w-5 h-5" />
@@ -531,13 +553,15 @@ ${result.inputUrl ? `Odkaz: ${result.inputUrl}` : ''}`;
 
       {/* URL & Price Evaluation Card */}
       <div className={`p-6 rounded-3xl border shadow-md ${
-        isCyber
+        isShadowGuard
+          ? 'bg-[#121214] border-[#CD7F32]/80 text-slate-100 shadowguard-bronze-border'
+          : isCyber
           ? 'bg-slate-950 border-slate-800 text-slate-200'
           : isContrast
           ? 'bg-black border-yellow-400 text-white'
-          : 'bg-white border-slate-200'
+          : 'bg-[#121214] border-slate-700 text-slate-100'
       }`}>
-        <h3 className="text-lg font-black mb-4 text-cyan-400 flex items-center gap-2 border-b border-slate-800 pb-2">
+        <h3 className="text-lg font-black mb-4 text-cyan-400 flex items-center gap-2 border-b border-slate-700 pb-2">
           <Info className="w-5 h-5 text-cyan-400" />
           Prověrka webové adresy (domény) a ceny
         </h3>
@@ -694,8 +718,8 @@ ${result.inputUrl ? `Odkaz: ${result.inputUrl}` : ''}`;
         </div>
       )}
 
-      {/* Start Over, WhatsApp & Send to Son Bottom Actions */}
-      <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+      {/* Start Over, WhatsApp, SMS & Send to Son */}
+      <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
         <button
           type="button"
           onClick={handleWhatsAppShare}
@@ -708,7 +732,20 @@ ${result.inputUrl ? `Odkaz: ${result.inputUrl}` : ''}`;
           }`}
         >
           <MessageCircle className="w-5 h-5 text-white" />
-          <span>SDÍLET PŘES WHATSAPP</span>
+          <span>WhatsApp</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleSmsShare}
+          className={`w-full sm:w-auto px-6 py-4 rounded-2xl font-black text-base shadow-xl transition-all flex items-center justify-center gap-2.5 border ${
+            isContrast
+              ? 'bg-yellow-400 text-black border-yellow-500'
+              : 'bg-sky-700 hover:bg-sky-600 text-white border-sky-400/40'
+          }`}
+        >
+          <MessageSquare className="w-5 h-5" />
+          <span>SMS</span>
         </button>
 
         <button
@@ -721,7 +758,7 @@ ${result.inputUrl ? `Odkaz: ${result.inputUrl}` : ''}`;
           }`}
         >
           <Send className="w-5 h-5" />
-          <span>ODESLAT SYNOVI NA TELEFON</span>
+          <span>Synovi na telefon</span>
         </button>
 
         <button

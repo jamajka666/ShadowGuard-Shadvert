@@ -166,7 +166,8 @@ export default function App() {
     try {
       const startTime = Date.now();
       const ac = new AbortController();
-      const kill = setTimeout(() => ac.abort(), 28000);
+      // Phone/mobile data + screenshot upload + Gemini often needs > 30 s.
+      const kill = setTimeout(() => ac.abort(), 120000);
       let response: Response;
       try {
         response = await fetch('/api/analyze-ad', {
@@ -212,10 +213,15 @@ export default function App() {
     } catch (err) {
       console.error('Error analyzing ad:', err);
       const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      const aborted =
+        (err instanceof DOMException && err.name === 'AbortError') ||
+        (err instanceof Error && err.name === 'AbortError');
       setAnalyzeError(
         offline
           ? 'Telefon je teď bez internetu. Připojte se a zkuste kontrolu znovu.'
-          : 'Server Shadvert teď neodpovídá (Lenovo nebo tunnel). Není to chyba Gemini v telefonu — kontrola běží na PC doma. Zkuste to za chvíli, v Adminu restartujte služby, nebo níže použijte ukázkové inzeráty.'
+          : aborted
+            ? 'Kontrola trvala moc dlouho (slabé připojení nebo velká fotka). Zkuste to znovu na Wi-Fi, nebo bez snímku — jen s odkazem.'
+            : 'Spojení s kontrolou se přerušilo. Na Wi-Fi to zkuste znovu. Když to na tabletu/PC jde a na telefonu ne, jde spíš o mobilní data než o vypnuté Lenovo.'
       );
     } finally {
       setIsLoading(false);
