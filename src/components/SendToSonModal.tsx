@@ -13,6 +13,15 @@ interface SendToSonModalProps {
   themeMode: ThemeMode;
 }
 
+const DEFAULT_SON_PHONE = '015228808328';
+const OLD_CZ_DIGITS = ['731558997', '420731558997'];
+
+function normalizeSonPhone(num: string): string {
+  const raw = num.replace(/[\s\-()/]/g, '').replace(/^\+/, '');
+  if (OLD_CZ_DIGITS.includes(raw) || raw === '00420731558997') return DEFAULT_SON_PHONE;
+  return num;
+}
+
 export const SendToSonModal: React.FC<SendToSonModalProps> = ({
   isOpen,
   onClose,
@@ -22,9 +31,10 @@ export const SendToSonModal: React.FC<SendToSonModalProps> = ({
 }) => {
   const [sonPhone, setSonPhone] = useState(() => {
     try {
-      return localStorage.getItem('strazce_son_phone') || '';
+      const saved = localStorage.getItem('strazce_son_phone') || '';
+      return normalizeSonPhone(saved) || DEFAULT_SON_PHONE;
     } catch {
-      return '';
+      return DEFAULT_SON_PHONE;
     }
   });
 
@@ -43,10 +53,12 @@ export const SendToSonModal: React.FC<SendToSonModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Clean phone number for international format
+  // International digits for wa.me / sms:  (DE 0152… → 49152…, CZ 9 číslic → 420…)
   const cleanPhone = (num: string) => {
-    const raw = num.replace(/\s+/g, '').replace('+', '');
-    if (raw.length === 9) return '420' + raw;
+    let raw = num.replace(/[\s\-()/]/g, '').replace(/^\+/, '');
+    if (raw.startsWith('00')) raw = raw.slice(2);
+    if (/^\d{9}$/.test(raw)) return '420' + raw;
+    if (raw.startsWith('0') && raw.length >= 10) return '49' + raw.slice(1);
     return raw;
   };
 
@@ -185,7 +197,7 @@ export const SendToSonModal: React.FC<SendToSonModalProps> = ({
               type="tel"
               value={sonPhone}
               onChange={(e) => setSonPhone(e.target.value)}
-              placeholder="Např. 777 123 456 nebo +420..."
+              placeholder="Např. 0152 28808328 nebo +49..."
               className={`w-full pl-11 pr-4 py-3 rounded-2xl border-2 font-mono text-sm transition-all ${
                 isCyber
                   ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500 focus:border-cyan-400'
