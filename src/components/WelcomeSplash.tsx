@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Shield, X } from 'lucide-react';
 
 const SPLASH_KEY = 'sg_splash_seen_v2';
-const LOGO_MS = 2500;
+const LOGO_MS = 5000;
 
 type Phase = 'logo' | 'guide';
 
@@ -12,6 +12,7 @@ interface WelcomeSplashProps {
 
 export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onDone }) => {
   const [phase, setPhase] = useState<Phase | null>(null);
+  const [logoReady, setLogoReady] = useState(false);
 
   useEffect(() => {
     try {
@@ -23,10 +24,10 @@ export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onDone }) => {
   }, []);
 
   useEffect(() => {
-    if (phase !== 'logo') return;
+    if (phase !== 'logo' || !logoReady) return;
     const t = window.setTimeout(() => setPhase('guide'), LOGO_MS);
     return () => window.clearTimeout(t);
-  }, [phase]);
+  }, [phase, logoReady]);
 
   const dismiss = () => {
     try {
@@ -56,6 +57,10 @@ export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onDone }) => {
           src="/brand/splash-initiative.png"
           alt="ShadowGuard Initiative představuje Shadvert"
           className="max-h-full max-w-full w-auto h-auto object-contain pointer-events-none select-none"
+          onLoad={() => setLogoReady(true)}
+          ref={(el) => {
+            if (el?.complete) setLogoReady(true);
+          }}
         />
       </div>
     );
