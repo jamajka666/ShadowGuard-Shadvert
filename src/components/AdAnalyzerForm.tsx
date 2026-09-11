@@ -470,7 +470,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
       <div className="sg-check-fields">
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3 mb-3 pb-3 border-b border-slate-800">
         <div>
-          <h2 className="text-xl md:text-2xl min-[1920px]:text-3xl font-black flex items-center gap-2">
+          <h2 className="text-2xl min-[1920px]:text-3xl font-black flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 md:w-7 md:h-7 text-emerald-400 shrink-0" />
             Zadejte inzerát k prověření
           </h2>
@@ -1014,7 +1014,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
             type="submit"
             form="sg-check-form"
             disabled={isLoading}
-            className={`w-full min-h-12 md:min-h-[52px] min-[1920px]:min-h-16 py-2.5 md:py-3 px-3 md:px-6 rounded-2xl font-black text-base leading-tight md:text-xl min-[1920px]:text-2xl shadow-2xl transition-all flex items-center justify-center gap-2 md:gap-3 ${
+            className={`w-full min-h-12 md:min-h-[52px] min-[1920px]:min-h-16 py-3 px-4 md:px-6 rounded-2xl font-black text-xl leading-tight min-[1920px]:text-2xl shadow-2xl transition-all flex items-center justify-center gap-3 ${
               isCyber
                 ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-slate-950 hover:brightness-110 shadow-[0_0_25px_rgba(16,185,129,0.5)] cyber-button-emerald'
                 : isContrast

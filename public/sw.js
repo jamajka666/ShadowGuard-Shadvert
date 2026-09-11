@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shadowguard-shadvert-v10';
+const CACHE_NAME = 'shadowguard-shadvert-v11';
 const PRECACHE = ['/manifest.json', '/brand/icon-192.png', '/brand/icon-512.png', '/brand/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {

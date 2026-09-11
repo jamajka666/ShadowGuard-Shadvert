@@ -1,7 +1,7 @@
 # ShadowGuard Shadvert — Šablona PHONE (telefon)
 
 **Breakpoint:** šířka viewportu &lt; 768px (portrait)  
-**Princip:** využít **výšku** — vše nad sebou, velké a čitelné  
+**Princip:** využít **výšku** — vše nad sebou. **Vizuální měřítko = tablet** (stejná čitelnost, velká tlačítka/písmo). **Layout = 1 sloupec (stack).** Není zmenšený desktop.  
 **Master:** viz `00-MASTER-layout-foundation.md` §2 (above-the-fold lock)
 
 ---

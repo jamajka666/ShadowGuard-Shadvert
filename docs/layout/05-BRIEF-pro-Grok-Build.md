@@ -17,7 +17,7 @@ Kontrola = max 3–4 stisky, bez nutnosti scrollovat.
 ## Breakpointy
 | | šířka | layout |
 |--|-------|--------|
-| PHONE | &lt; 768px | 1 sloupec, vše na výšku, fonty ≥ 18/20px, CTA ≥ 48px full-width |
+| PHONE | &lt; 768px | 1 sloupec (stack). **Vizuální měřítko = tablet** — stejná čitelnost, ne zmenšený desktop. Fonty ≥ 18/20px, CTA ≥ 48px full-width |
 | TABLET | 768–1024px | stejná skládanka, víc vzduchu, header 1–2 řady |
 | MONITOR | 1025–1919px | víc do stran (quick akce smí vedle vstupu), CTA dole na šířku karty |
 | TV | ≥ 1920px | jako monitor, větší typografie, CTA ≥ 64px, méně hustoty |

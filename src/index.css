@@ -21,16 +21,17 @@ html[data-font-size="xlarge"] {
   font-size: 137.5%; /* ~22px — A++ */
 }
 
-/* PHONE < 768: senioři, body ≥ 18px, labely ~20px. Není zmenšený desktop. */
+/* PHONE < 768: vizuální měřítko = tablet (čitelnost), layout = 1 sloupec.
+   Root větší než tablet, ať tlačítka/písmo nejsou „malinkatý desktop“. */
 @media (max-width: 767.98px) {
   html[data-font-size="normal"] {
-    font-size: 112.5%; /* 18px */
-  }
-  html[data-font-size="large"] {
     font-size: 125%; /* 20px */
   }
+  html[data-font-size="large"] {
+    font-size: 137.5%; /* 22px — tablet large je 19px */
+  }
   html[data-font-size="xlarge"] {
-    font-size: 137.5%; /* 22px */
+    font-size: 150%; /* 24px */
   }
 }
 
