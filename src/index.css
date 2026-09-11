@@ -5,6 +5,8 @@
 html {
   font-size: 100%; /* fallback = normal */
   transition: font-size 0.2s ease;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 html[data-font-size="normal"] {
@@ -19,19 +21,15 @@ html[data-font-size="xlarge"] {
   font-size: 137.5%; /* ~22px — A++ (+38 % vs A, jen desktop) */
 }
 
-/* Telefon / úzký displej: A++ = A+; A+ o něco větší, ať to není mrňavé */
+/* Telefon: stejný vizuální stupeň jako A++ na tabletu — větší písmo, tlačítka, mezery */
 @media (max-width: 640px) {
+  html[data-font-size="normal"] {
+    font-size: 112.5%;
+  }
   html[data-font-size="large"],
   html[data-font-size="xlarge"] {
-    font-size: 125%;
+    font-size: 137.5%;
   }
-}
-
-/* První obrazovka: od headeru po tlačítko Prověřit, bez scrollu */
-.sg-home-stage {
-  min-height: calc(100svh - 9.25rem);
-  display: flex;
-  flex-direction: column;
 }
 
 @keyframes cyber-pulse {

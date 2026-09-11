@@ -53,9 +53,7 @@ export default function App() {
       /* ignore */
     }
     if (typeof document !== 'undefined') {
-      const narrow = window.matchMedia('(max-width: 640px)').matches;
-      const applied = narrow && size === 'xlarge' ? 'large' : size;
-      document.documentElement.setAttribute('data-font-size', applied);
+      document.documentElement.setAttribute('data-font-size', size);
     }
     return size;
   });
@@ -79,22 +77,7 @@ export default function App() {
     }
   }, [userRoleMode]);
 
-  // Phone: cap A++ → A+ so layout does not break; remember A++ for desktop
-  const [isNarrowViewport, setIsNarrowViewport] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(max-width: 640px)').matches;
-  });
-
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 640px)');
-    const onChange = () => setIsNarrowViewport(mq.matches);
-    onChange();
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-
-  const uiFontSize: 'normal' | 'large' | 'xlarge' =
-    isNarrowViewport && fontSize === 'xlarge' ? 'large' : fontSize;
+  const uiFontSize: 'normal' | 'large' | 'xlarge' = fontSize;
 
   useEffect(() => {
     document.documentElement.setAttribute('data-font-size', uiFontSize);
@@ -569,7 +552,7 @@ export default function App() {
       </nav>
 
       {/* Main Content Area */}
-      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-3 sm:py-4 flex-1 flex flex-col">
+      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 flex-1">
         {activeTab === 'analyzer' && (
           <div>
             {isLoading ? (
@@ -621,7 +604,7 @@ export default function App() {
                 </div>
               )
             ) : (
-              <div className="flex flex-col gap-8">
+              <div>
                 {analyzeError && (
                   <div
                     role="alert"
@@ -638,20 +621,18 @@ export default function App() {
                     </button>
                   </div>
                 )}
-                <div className="sg-home-stage">
-                  <AdAnalyzerForm
-                    onAnalyze={handleAnalyze}
-                    isLoading={isLoading}
-                    fontSize={uiFontSize}
-                    themeMode={themeMode}
-                    history={history}
-                    userRoleMode={userRoleMode}
-                    onOpenSendToSon={(customText) => {
-                      setSendToSonCustomText(customText);
-                      setIsSendToSonOpen(true);
-                    }}
-                  />
-                </div>
+                <AdAnalyzerForm
+                  onAnalyze={handleAnalyze}
+                  isLoading={isLoading}
+                  fontSize={uiFontSize}
+                  themeMode={themeMode}
+                  history={history}
+                  userRoleMode={userRoleMode}
+                  onOpenSendToSon={(customText) => {
+                    setSendToSonCustomText(customText);
+                    setIsSendToSonOpen(true);
+                  }}
+                />
 
                 {!isSimpleMode && <FamilySettingsCard />}
 
