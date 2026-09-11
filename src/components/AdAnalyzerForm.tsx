@@ -409,7 +409,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
     <div className="space-y-6">
       {/* Kontrola inzerátu je první obsah na hlavní stránce. */}
       <div
-        className={`rounded-3xl p-4 sm:p-8 shadow-2xl border transition-all ${
+        className={`rounded-3xl p-6 sm:p-8 shadow-2xl border transition-all ${
           isShadowGuard
             ? 'bg-[#121214] border-[#CD7F32]/50 text-slate-100 shadow-[0_0_35px_rgba(212,160,23,0.2)] shadowguard-bronze-border'
             : isCyber
@@ -419,10 +419,10 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
             : 'bg-[#121214] border-[#B8860B]/60 text-slate-100 shadowguard-bronze-border'
         }`}
       >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-800">
         <div>
-          <h2 className="text-lg sm:text-2xl font-black flex items-center gap-2">
-            <ShieldCheck className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-400 shrink-0" />
+          <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2">
+            <ShieldCheck className="w-7 h-7 text-emerald-400 shrink-0" />
             Zadejte inzerát k prověření
           </h2>
           <p className="text-sm mt-1 text-slate-400">
@@ -430,25 +430,25 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => setShowPermissionCheck(!showPermissionCheck)}
             title="Jak povolit mikrofon v prohlížeči (Chrome/Safari/Edge)"
-            className={`inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2.5 rounded-lg sm:rounded-xl font-bold border text-[11px] sm:text-sm whitespace-nowrap transition-all ${
+            className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-bold border text-xs sm:text-sm whitespace-nowrap transition-all ${
               micPermissionDenied || showPermissionCheck
                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
                 : 'bg-[#1C1C1E] text-slate-300 border-slate-800 hover:text-white'
             }`}
           >
-            <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+            <ShieldAlert className="w-4 h-4 text-amber-400" />
             <span>Návod mikrofon 🔒</span>
           </button>
 
           <button
             type="button"
             onClick={() => toggleSpeechRecognition('rawText')}
-            className={`inline-flex items-center gap-1 sm:gap-2 px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 rounded-lg sm:rounded-xl font-bold shadow-sm transition-all border text-[11px] sm:text-sm whitespace-nowrap ${
+            className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold shadow-sm transition-all border text-xs sm:text-sm whitespace-nowrap ${
               listeningField === 'rawText'
                 ? 'bg-rose-600 text-white border-rose-400 animate-pulse ring-2 ring-rose-400'
                 : isCyber
@@ -460,12 +460,12 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           >
             {listeningField === 'rawText' ? (
               <>
-                <MicOff className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-white" />
+                <MicOff className="w-4 h-4 animate-spin text-white" />
                 <span>Poslouchám... (Zastavit)</span>
               </>
             ) : (
               <>
-                <Mic className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+                <Mic className="w-4 h-4 text-emerald-400" />
                 <span>Diktovat hlasem</span>
               </>
             )}
@@ -474,7 +474,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           <button
             type="button"
             onClick={handlePasteClipboard}
-            className={`inline-flex items-center gap-1 sm:gap-2 px-2.5 py-1.5 sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl font-bold shadow-sm transition-all border text-[11px] sm:text-sm whitespace-nowrap ${
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold shadow-sm transition-all border text-xs sm:text-sm whitespace-nowrap ${
               isCyber
                 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/30'
                 : isContrast
@@ -482,7 +482,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
                 : 'bg-[#1C1C1E] text-[#00F5FF] border-[#00F5FF]/40 hover:bg-cyan-950/40'
             }`}
           >
-            <Clipboard className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+            <Clipboard className="w-5 h-5" />
             <span>Vložit ze schránky</span>
           </button>
         </div>
@@ -505,7 +505,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
         />
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {/* URL Input */}
         <div>
           <label className={`mb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 font-bold ${textClasses}`}>
@@ -525,7 +525,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
                   setErrorMsg('');
                 }}
                 placeholder="Vložte sem odkaz na inzerát (např. https://...)"
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3.5 rounded-2xl border-2 transition-all font-mono text-sm sm:text-base ${
+                className={`w-full px-4 py-3.5 rounded-2xl border-2 transition-all font-mono text-sm sm:text-base ${
                   listeningField === 'url'
                     ? 'border-rose-500 ring-2 ring-rose-500/30 bg-rose-950/20'
                     : isCyber
@@ -546,12 +546,12 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               )}
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => toggleSpeechRecognition('url')}
               title={listeningField === 'url' ? 'Zastavit diktování URL' : 'Diktovat webovou adresu'}
-              className={`p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border-2 transition-all shrink-0 flex items-center justify-center ${
+              className={`p-3.5 rounded-2xl border-2 transition-all shrink-0 flex items-center justify-center ${
                 listeningField === 'url'
                   ? 'bg-rose-600 text-white border-rose-400 animate-pulse ring-2 ring-rose-400'
                   : isCyber
@@ -561,7 +561,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
                   : 'bg-[#1A1A1A] border-[#B8860B]/50 text-[#00F5FF] hover:bg-[#222222]'
               }`}
             >
-              {listeningField === 'url' ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />}
+              {listeningField === 'url' ? <MicOff className="w-5 h-5 animate-spin" /> : <Mic className="w-5 h-5 text-emerald-400" />}
             </button>
 
             <button
@@ -569,7 +569,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               onClick={handleCheckSslAndDomain}
               disabled={isCheckingSsl || !url.trim()}
               title="Okamžitě zkontrolovat SSL certifikát a stáří domény"
-              className={`px-2.5 py-2.5 sm:px-3.5 sm:py-3.5 rounded-xl sm:rounded-2xl font-black border-2 transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm ${
+              className={`px-3.5 py-3.5 rounded-2xl font-black border-2 transition-all shrink-0 flex items-center gap-2 text-xs sm:text-sm ${
                 isCheckingSsl
                   ? 'bg-amber-600 text-white border-amber-400 opacity-80'
                   : isCyber
@@ -645,7 +645,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
             <button
               type="button"
               onClick={() => toggleSpeechRecognition('rawText')}
-              className={`inline-flex shrink-0 self-start items-center gap-1.5 px-2.5 py-1 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold border whitespace-nowrap transition-all ${
+              className={`inline-flex shrink-0 self-start items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border whitespace-nowrap transition-all ${
                 listeningField === 'rawText'
                   ? 'bg-rose-600 text-white border-rose-400 animate-pulse'
                   : isCyber
@@ -702,7 +702,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               <Image className="w-5 h-5 text-emerald-400" />
               3. Snímek obrazovky e-shopu / Fotka (volitelné)
             </label>
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
               {/* Camera Photo Capture Button - Eshop Screen */}
               <button
                 type="button"
@@ -710,7 +710,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
                   setCameraTargetMode('eshop');
                   startCamera();
                 }}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 rounded-lg sm:rounded-xl font-bold border text-[11px] sm:text-sm whitespace-nowrap transition-all shadow-sm ${
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-bold border text-xs sm:text-sm whitespace-nowrap transition-all shadow-sm ${
                   isCyber
                     ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 hover:bg-cyan-500/30'
                     : isContrast
@@ -729,7 +729,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
                   setCameraTargetMode('ad');
                   startCamera();
                 }}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 rounded-lg sm:rounded-xl font-bold border text-[11px] sm:text-sm whitespace-nowrap transition-all shadow-sm ${
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-bold border text-xs sm:text-sm whitespace-nowrap transition-all shadow-sm ${
                   isCyber
                     ? 'bg-slate-900 text-slate-200 border-slate-700 hover:border-cyan-500'
                     : isContrast
@@ -742,7 +742,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               </button>
 
               <label
-                className={`cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 rounded-lg sm:rounded-xl font-bold border text-[11px] sm:text-sm whitespace-nowrap transition-all ${
+                className={`cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-bold border text-xs sm:text-sm whitespace-nowrap transition-all ${
                   isCyber
                     ? 'bg-slate-900 border-slate-700 text-slate-200 hover:border-cyan-400'
                     : isContrast

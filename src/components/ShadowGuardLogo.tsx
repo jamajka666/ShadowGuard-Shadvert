@@ -11,8 +11,8 @@ export const ShadowGuardLogo: React.FC<ShadowGuardLogoProps> = ({
   showSubtitle = true,
   className = '',
 }) => {
-  const iconSize = size === 'sm' ? 'w-8 h-8' : size === 'lg' ? 'w-14 h-14' : 'w-9 h-9 sm:w-10 sm:h-10';
-  const titleSize = size === 'sm' ? 'text-lg' : size === 'lg' ? 'text-3xl' : 'text-xl sm:text-2xl';
+  const iconSize = size === 'sm' ? 'w-8 h-8' : size === 'lg' ? 'w-14 h-14' : 'w-10 h-10';
+  const titleSize = size === 'sm' ? 'text-lg' : size === 'lg' ? 'text-3xl' : 'text-2xl';
   const [imgOk, setImgOk] = React.useState(true);
 
   return (

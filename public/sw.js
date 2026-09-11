@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shadowguard-shadvert-v3';
+const CACHE_NAME = 'shadowguard-shadvert-v4';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
