@@ -21,14 +21,14 @@ html[data-font-size="xlarge"] {
   font-size: 137.5%; /* ~22px — A++ (+38 % vs A, jen desktop) */
 }
 
-/* Telefon: stejný vizuální stupeň jako A++ na tabletu — větší písmo, tlačítka, mezery */
+/* Telefon: výrazně větší než tablet, ať ovládání vyplní úzký displej (tablet beze změny) */
 @media (max-width: 640px) {
   html[data-font-size="normal"] {
-    font-size: 112.5%;
+    font-size: 125%;
   }
   html[data-font-size="large"],
   html[data-font-size="xlarge"] {
-    font-size: 137.5%;
+    font-size: 156.25%; /* ~25px — tablety zůstávají na 118.75% */
   }
 }
 

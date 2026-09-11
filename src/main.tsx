@@ -13,29 +13,32 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 });
 
-// Register Service Worker for PWA support
-if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/sw.js')
+      .register('/sw.js?v=7', { updateViaCache: 'none' })
       .then((reg) => {
-        console.log('[PWA] ServiceWorker registered successfully:', reg.scope);
+        void reg.update();
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              nw.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
       })
       .catch((err) => {
         console.warn('[PWA] ServiceWorker registration failed:', err);
       });
   });
-} else if ('serviceWorker' in navigator) {
-  // Also register in dev mode if needed
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/sw.js')
-      .then((reg) => {
-        console.log('[PWA] ServiceWorker registered in dev:', reg.scope);
-      })
-      .catch((err) => {
-        console.warn('[PWA] ServiceWorker dev registration error:', err);
-      });
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
   });
 }
 
