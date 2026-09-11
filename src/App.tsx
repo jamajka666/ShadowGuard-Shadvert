@@ -357,7 +357,7 @@ export default function App() {
       {showHomeFold && (
         <div className="sg-fold-screen">
           {headerEl}
-          <div className="sg-fold-body mx-auto w-full max-w-[1100px] min-[1920px]:max-w-[1200px] px-3 py-2 md:px-5 md:py-3">
+          <div className="sg-fold-body mx-auto w-full max-w-full md:max-w-[900px] lg:max-w-[1100px] min-[1920px]:max-w-[1200px] px-3 py-2 md:px-5 md:py-3">
             {analyzeError && (
               <div
                 role="alert"
@@ -744,9 +744,9 @@ export default function App() {
         uiMode={isCyber ? 'cyber' : isContrast ? 'contrast' : 'senior'}
       />
 
-      <div id="sg-below-fold" className="mx-auto w-full max-w-[1100px] min-[1920px]:max-w-[1200px] px-4 pt-6" />
+      <div id="sg-below-fold" className="mx-auto w-full max-w-full md:max-w-[900px] lg:max-w-[1100px] min-[1920px]:max-w-[1200px] px-4 pt-6" />
       {showHomeFold && (
-        <div className="mx-auto w-full max-w-[1100px] min-[1920px]:max-w-[1200px] px-4 pb-8 space-y-8">
+        <div className="mx-auto w-full max-w-full md:max-w-[900px] lg:max-w-[1100px] min-[1920px]:max-w-[1200px] px-4 pb-8 space-y-8">
           <FamilySettingsCard />
           <ScamAlertsSection themeMode={themeMode} fontSize={uiFontSize} />
           {userRoleMode === 'expert' && history.length > 0 && (

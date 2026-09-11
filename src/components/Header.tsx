@@ -32,20 +32,18 @@ export const Header: React.FC<HeaderProps> = (props) => {
   return <>
     <header className="sg-header shrink-0 safe-area-pad-top border-b border-[#CD7F32]/40 bg-[#121214] text-slate-100 shadow-[0_4px_20px_rgba(212,160,23,0.12)]">
       {!isOnline && <p className="bg-rose-700 px-4 py-2 text-center text-sm font-bold text-white">Bez připojení: novou prověrku teď nelze spustit.</p>}
-      <div className="mx-auto w-full max-w-[1100px] min-[1920px]:max-w-[1200px] px-3 py-2 md:px-5 md:py-2.5">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center justify-between gap-2 lg:justify-start">
-            <ShadowGuardLogo size="md" showSubtitle={true} className="min-w-0" />
-            <div className="lg:hidden">{connected}</div>
+      <div className="mx-auto w-full max-w-full md:max-w-[900px] lg:max-w-[1100px] min-[1920px]:max-w-[1200px] px-3 py-2 md:px-5 md:py-2.5">
+        {/* PHONE: 3 řady dle 01-PHONE. TABLET: 1–2 řady. MONITOR/TV: 1 řada. */}
+        <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center md:justify-between">
+          <ShadowGuardLogo size="md" showSubtitle={true} className="min-w-0 col-span-1 self-center" />
+          <div className="justify-self-end self-center md:order-last">{connected}</div>
+          <div className="col-span-2 md:col-auto flex min-h-11 items-center rounded-xl border border-slate-700 bg-[#1C1C1E] p-1" aria-label="Úroveň zobrazených detailů">
+            <button type="button" onClick={() => props.setUserRoleMode('senior')} className={`flex-1 md:flex-none rounded-lg px-3 min-h-11 md:min-h-9 text-base md:text-sm font-bold ${props.userRoleMode === 'senior' ? 'bg-[#D4AF37] text-black' : 'text-slate-300'}`}>Stručný</button>
+            <button type="button" onClick={() => props.setUserRoleMode('expert')} className={`flex-1 md:flex-none rounded-lg px-3 min-h-11 md:min-h-9 text-base md:text-sm font-bold ${props.userRoleMode === 'expert' ? 'bg-cyan-400 text-slate-950' : 'text-slate-300'}`}>Detailní</button>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex min-h-11 shrink-0 rounded-xl border border-slate-700 bg-[#1C1C1E] p-1" aria-label="Úroveň zobrazených detailů">
-              <button type="button" onClick={() => props.setUserRoleMode('senior')} className={`rounded-lg px-3 min-h-9 text-base md:text-sm font-bold ${props.userRoleMode === 'senior' ? 'bg-[#D4AF37] text-black' : 'text-slate-300'}`}>Stručný</button>
-              <button type="button" onClick={() => props.setUserRoleMode('expert')} className={`rounded-lg px-3 min-h-9 text-base md:text-sm font-bold ${props.userRoleMode === 'expert' ? 'bg-cyan-400 text-slate-950' : 'text-slate-300'}`}>Detailní</button>
-            </div>
-            <button type="button" onClick={() => { window.dispatchEvent(new Event('shadowguard:voice-controls')); props.onOpenVoiceControls(); }} className={`${ctrl} border border-cyan-500/40 bg-[#1C1C1E] text-cyan-300`}><Mic className="h-4 w-4" /> Hlasové ovládání</button>
-            <button type="button" onClick={() => setSettingsOpen(true)} className={`${ctrl} bg-[#D4AF37] text-black font-black`}><Settings className="h-4 w-4" /> Nastavení</button>
-            <div className="hidden lg:inline-flex">{connected}</div>
+          <div className="col-span-2 md:col-auto flex gap-2">
+            <button type="button" onClick={() => { window.dispatchEvent(new Event('shadowguard:voice-controls')); props.onOpenVoiceControls(); }} className={`${ctrl} flex-1 md:flex-none border border-cyan-500/40 bg-[#1C1C1E] text-cyan-300`}><Mic className="h-4 w-4" /> Hlasové ovládání</button>
+            <button type="button" onClick={() => setSettingsOpen(true)} className={`${ctrl} flex-1 md:flex-none bg-[#D4AF37] text-black font-black`}><Settings className="h-4 w-4" /> Nastavení</button>
           </div>
         </div>
       </div>
