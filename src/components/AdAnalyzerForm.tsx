@@ -409,7 +409,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
     <div className="space-y-6">
       {/* Kontrola inzerátu je první obsah na hlavní stránce. */}
       <div
-        className={`rounded-3xl p-6 sm:p-8 shadow-2xl border transition-all ${
+        className={`rounded-3xl p-6 sm:p-4 lg:p-6 shadow-2xl border transition-all ${
           isShadowGuard
             ? 'bg-[#121214] border-[#CD7F32]/50 text-slate-100 shadow-[0_0_35px_rgba(212,160,23,0.2)] shadowguard-bronze-border'
             : isCyber
@@ -419,13 +419,13 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
             : 'bg-[#121214] border-[#B8860B]/60 text-slate-100 shadowguard-bronze-border'
         }`}
       >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-3 mb-6 sm:mb-3 lg:mb-5 pb-4 sm:pb-2 lg:pb-4 border-b border-slate-800">
         <div>
-          <h2 className="text-2xl font-black flex items-center gap-2">
+          <h2 className="text-2xl sm:text-xl lg:text-2xl font-black flex items-center gap-2">
             <ShieldCheck className="w-7 h-7 text-emerald-400 shrink-0" />
             Zadejte inzerát k prověření
           </h2>
-          <p className="text-sm mt-1 text-slate-400">
+          <p className="text-sm mt-1 text-slate-400 max-sm:block hidden lg:block">
             Zkopírujte webový odkaz (URL), vložte text zprávy z WhatsAppu / SMS, nebo nahrajte fotku obrazovky.
           </p>
         </div>
@@ -435,7 +435,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
             type="button"
             onClick={() => setShowPermissionCheck(!showPermissionCheck)}
             title="Jak povolit mikrofon v prohlížeči (Chrome/Safari/Edge)"
-            className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-bold border text-sm whitespace-nowrap transition-all ${
+            className={`inline-flex items-center gap-1.5 px-3 py-2.5 sm:py-1.5 lg:py-2.5 rounded-xl font-bold border text-sm whitespace-nowrap transition-all ${
               micPermissionDenied || showPermissionCheck
                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
                 : 'bg-[#1C1C1E] text-slate-300 border-slate-800 hover:text-white'
@@ -448,7 +448,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           <button
             type="button"
             onClick={() => toggleSpeechRecognition('rawText')}
-            className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold shadow-sm transition-all border text-sm whitespace-nowrap ${
+            className={`inline-flex items-center gap-2 px-3.5 py-2.5 sm:py-1.5 lg:py-2.5 rounded-xl font-bold shadow-sm transition-all border text-sm whitespace-nowrap ${
               listeningField === 'rawText'
                 ? 'bg-rose-600 text-white border-rose-400 animate-pulse ring-2 ring-rose-400'
                 : isCyber
@@ -474,7 +474,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           <button
             type="button"
             onClick={handlePasteClipboard}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold shadow-sm transition-all border text-sm whitespace-nowrap ${
+            className={`inline-flex items-center gap-2 px-4 py-2.5 sm:py-1.5 lg:py-2.5 rounded-xl font-bold shadow-sm transition-all border text-sm whitespace-nowrap ${
               isCyber
                 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/30'
                 : isContrast
@@ -505,7 +505,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
         />
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-3 lg:space-y-5">
         {/* URL Input */}
         <div>
           <label className={`mb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 font-bold ${textClasses}`}>
@@ -525,7 +525,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
                   setErrorMsg('');
                 }}
                 placeholder="Vložte sem odkaz na inzerát (např. https://...)"
-                className={`w-full px-4 py-3.5 rounded-2xl border-2 transition-all font-mono text-base ${
+                className={`w-full px-4 py-3.5 sm:py-2.5 lg:py-3.5 rounded-2xl border-2 transition-all font-mono text-base ${
                   listeningField === 'url'
                     ? 'border-rose-500 ring-2 ring-rose-500/30 bg-rose-950/20'
                     : isCyber
@@ -551,7 +551,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               type="button"
               onClick={() => toggleSpeechRecognition('url')}
               title={listeningField === 'url' ? 'Zastavit diktování URL' : 'Diktovat webovou adresu'}
-              className={`p-3.5 rounded-2xl border-2 transition-all shrink-0 flex items-center justify-center ${
+              className={`p-3.5 sm:p-2 lg:p-3.5 rounded-2xl border-2 transition-all shrink-0 flex items-center justify-center ${
                 listeningField === 'url'
                   ? 'bg-rose-600 text-white border-rose-400 animate-pulse ring-2 ring-rose-400'
                   : isCyber
@@ -569,7 +569,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               onClick={handleCheckSslAndDomain}
               disabled={isCheckingSsl || !url.trim()}
               title="Okamžitě zkontrolovat SSL certifikát a stáří domény"
-              className={`px-3.5 py-3.5 rounded-2xl font-black border-2 transition-all shrink-0 flex items-center gap-2 text-sm ${
+              className={`px-3.5 py-3.5 sm:py-2 lg:py-3.5 rounded-2xl font-black border-2 transition-all shrink-0 flex items-center gap-2 text-sm ${
                 isCheckingSsl
                   ? 'bg-amber-600 text-white border-amber-400 opacity-80'
                   : isCyber
@@ -676,7 +676,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               }}
               rows={3}
               placeholder="Zkopírujte sem text zprávy od kupujícího/prodávajícího nebo jej nadiktejte mikrofónem..."
-              className={`w-full px-4 py-3 rounded-2xl border-2 transition-all ${textClasses} ${
+              className={`w-full px-4 py-3 sm:py-2 lg:py-3 rounded-2xl border-2 transition-all min-h-[5.5rem] sm:min-h-[4rem] lg:min-h-[5.5rem] ${textClasses} ${
                 listeningField === 'rawText'
                   ? 'border-rose-500 ring-2 ring-rose-500/30 bg-rose-950/20'
                   : isCyber
@@ -961,7 +961,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full py-4 px-6 rounded-2xl font-black text-xl shadow-2xl transition-all flex items-center justify-center gap-3 ${
+            className={`w-full py-4 sm:py-3 lg:py-4 px-6 rounded-2xl font-black text-xl sm:text-lg lg:text-xl shadow-2xl transition-all flex items-center justify-center gap-3 ${
               isCyber
                 ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-slate-950 hover:brightness-110 shadow-[0_0_25px_rgba(16,185,129,0.5)] cyber-button-emerald'
                 : isContrast

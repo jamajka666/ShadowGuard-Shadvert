@@ -552,7 +552,7 @@ export default function App() {
       </nav>
 
       {/* Main Content Area */}
-      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 flex-1">
+      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-2 lg:py-6 flex-1">
         {activeTab === 'analyzer' && (
           <div>
             {isLoading ? (
