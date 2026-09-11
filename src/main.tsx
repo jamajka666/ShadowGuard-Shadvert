@@ -16,7 +16,7 @@ window.addEventListener('unhandledrejection', (event) => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/sw.js?v=8', { updateViaCache: 'none' })
+      .register('/sw.js?v=9', { updateViaCache: 'none' })
       .then((reg) => {
         void reg.update();
         if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });

@@ -219,7 +219,7 @@ export const VoiceCommandBar: React.FC<VoiceCommandBarProps> = ({ handlers, them
     <>
       <div
         id="voice-controls"
-        className={`w-full border-b transition-all ${
+        className={`w-full border-b transition-all fixed top-0 left-0 right-0 z-[60] ${
           isListening
             ? isShadowGuard
               ? 'bg-[#121214] border-[#D4A017] text-[#F5D061] shadow-[0_0_25px_rgba(212,160,23,0.35)]'

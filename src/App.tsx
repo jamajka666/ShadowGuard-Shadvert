@@ -275,6 +275,34 @@ export default function App() {
     },
   };
 
+  const showHomeFold =
+    !isSimpleMode && activeTab === 'analyzer' && !isLoading && !currentResult;
+
+  const headerEl = !isSimpleMode ? (
+        <Header
+          fontSize={uiFontSize}
+          setFontSize={setFontSize}
+          themeMode={themeMode}
+          setThemeMode={setThemeMode}
+          userRoleMode={userRoleMode}
+          setUserRoleMode={setUserRoleMode}
+          autoRead={autoRead}
+          setAutoRead={setAutoRead}
+          onOpenCriteria={() => setIsCriteriaOpen(true)}
+          onOpenFatherGuide={() => setIsFatherGuideOpen(true)}
+          onOpenSendToSon={() => {
+            setSendToSonCustomText(undefined);
+            setIsSendToSonOpen(true);
+          }}
+          onOpenInstallPwa={() => setIsInstallPwaOpen(true)}
+          onOpenGuide={() => setActiveTab('guide')}
+          onOpenQuiz={() => setActiveTab('quiz')}
+          onOpenVoiceControls={() => {
+            document.getElementById('voice-controls')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }}
+        />
+      ) : null;
+
   return (
     <div
       className={`min-h-screen transition-colors font-sans flex flex-col relative ${
@@ -326,31 +354,38 @@ export default function App() {
         </div>
       )}
 
+      {showHomeFold && (
+        <div className="sg-fold-screen">
+          {headerEl}
+          <div className="sg-fold-body mx-auto w-full max-w-[1100px] min-[1920px]:max-w-[1200px] px-3 py-2 md:px-5 md:py-3">
+            {analyzeError && (
+              <div
+                role="alert"
+                className="mb-2 shrink-0 rounded-2xl border-2 border-rose-500/70 bg-rose-950/70 px-4 py-2 text-sm text-rose-100"
+              >
+                <p className="font-black">Kontrola se nedokončila</p>
+                <p className="mt-1 leading-relaxed">{analyzeError}</p>
+              </div>
+            )}
+            <AdAnalyzerForm
+              onAnalyze={handleAnalyze}
+              isLoading={isLoading}
+              fontSize={uiFontSize}
+              themeMode={themeMode}
+              history={history}
+              userRoleMode={userRoleMode}
+              onOpenSendToSon={(customText) => {
+                setSendToSonCustomText(customText);
+                setIsSendToSonOpen(true);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Header — full chrome on First Creation; compact on simple */}
-      {!isSimpleMode ? (
-        <Header
-          fontSize={uiFontSize}
-          setFontSize={setFontSize}
-          themeMode={themeMode}
-          setThemeMode={setThemeMode}
-          userRoleMode={userRoleMode}
-          setUserRoleMode={setUserRoleMode}
-          autoRead={autoRead}
-          setAutoRead={setAutoRead}
-          onOpenCriteria={() => setIsCriteriaOpen(true)}
-          onOpenFatherGuide={() => setIsFatherGuideOpen(true)}
-          onOpenSendToSon={() => {
-            setSendToSonCustomText(undefined);
-            setIsSendToSonOpen(true);
-          }}
-          onOpenInstallPwa={() => setIsInstallPwaOpen(true)}
-          onOpenGuide={() => setActiveTab('guide')}
-          onOpenQuiz={() => setActiveTab('quiz')}
-          onOpenVoiceControls={() => {
-            document.getElementById('voice-controls')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }}
-        />
-      ) : (
+      {!showHomeFold && !isSimpleMode && headerEl}
+      {!showHomeFold && isSimpleMode && (
         <header
           className="border-b px-4 py-4"
           style={{ background: calmTokens.cardBg, borderColor: calmTokens.border }}
@@ -552,7 +587,7 @@ export default function App() {
       </nav>
 
       {/* Main Content Area */}
-      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-2 lg:py-6 flex-1">
+      <main className={`max-w-5xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-2 lg:py-6 flex-1 ${showHomeFold ? 'hidden' : ''}`}>
         {activeTab === 'analyzer' && (
           <div>
             {isLoading ? (
@@ -633,7 +668,6 @@ export default function App() {
                     setIsSendToSonOpen(true);
                   }}
                 />
-
                 {!isSimpleMode && <FamilySettingsCard />}
 
                 {!isSimpleMode && <ScamAlertsSection themeMode={themeMode} fontSize={uiFontSize} />}
@@ -709,6 +743,28 @@ export default function App() {
         onClose={() => setIsInstallPwaOpen(false)}
         uiMode={isCyber ? 'cyber' : isContrast ? 'contrast' : 'senior'}
       />
+
+      <div id="sg-below-fold" className="mx-auto w-full max-w-[1100px] min-[1920px]:max-w-[1200px] px-4 pt-6" />
+      {showHomeFold && (
+        <div className="mx-auto w-full max-w-[1100px] min-[1920px]:max-w-[1200px] px-4 pb-8 space-y-8">
+          <FamilySettingsCard />
+          <ScamAlertsSection themeMode={themeMode} fontSize={uiFontSize} />
+          {userRoleMode === 'expert' && history.length > 0 && (
+            <HistoryList
+              history={history}
+              onSelectResult={(item) => {
+                setCurrentResult(item);
+                setShowSimpleDetails(false);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              onClearHistory={() => setHistory([])}
+              fontSize={uiFontSize}
+              highContrast={isContrast}
+              themeMode={themeMode}
+            />
+          )}
+        </div>
+      )}
 
       {/* Footer */}
       <footer

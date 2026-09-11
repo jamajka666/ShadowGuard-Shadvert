@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Clipboard, Link, FileText, Image, ShieldCheck, Sparkles, AlertCircle, X, Send, Mic, MicOff, ShieldAlert, CheckCircle2, Camera, RefreshCw } from 'lucide-react';
 import { SAMPLE_SCENARIOS } from '../data/sampleScenarios';
 import { PredefinedScenario, SSLDomainInfo, ThemeMode, AdCheckResult, UserRoleMode } from '../types';
@@ -405,11 +406,58 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
 
   const isExpert = userRoleMode === 'expert';
 
+  const extrasTarget = typeof document !== 'undefined' ? document.getElementById('sg-below-fold') : null;
+
+  const extras = (
+    <div className="sg-form-extras space-y-6">
+      <div className="mt-2">
+        <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-cyan-400" />
+          Vyzkoušejte ukázkové inzeráty (1 kliknutí):
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          {SAMPLE_SCENARIOS.map((sc) => (
+            <button
+              key={sc.id}
+              type="button"
+              onClick={() => handleSelectScenario(sc)}
+              className={`text-left p-3 rounded-xl border text-sm transition-all duration-200 flex flex-col justify-between min-h-11 ${
+                isCyber
+                  ? 'bg-slate-900/80 border-slate-800 hover:border-cyan-400 hover:shadow-[0_0_15px_rgba(6,182,212,0.35)] hover:-translate-y-0.5 text-slate-200'
+                  : isContrast
+                  ? 'bg-slate-900 border-slate-700 hover:border-yellow-400 text-slate-200'
+                  : 'bg-[#1C1C1E] hover:bg-[#252528] border-[#B8860B]/40 hover:border-[#00F5FF] text-slate-200'
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="font-bold text-white truncate">{sc.title}</span>
+                  <span
+                    className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+                      sc.badge === 'PODVOD'
+                        ? 'bg-rose-950 text-rose-300 border border-rose-500/40'
+                        : sc.badge === 'OPATRNOSTI'
+                        ? 'bg-amber-950 text-amber-300 border border-amber-500/40'
+                        : 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
+                    }`}
+                  >
+                    {sc.badge}
+                  </span>
+                </div>
+                <p className="text-slate-400 text-sm line-clamp-1">{sc.subtitle}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+      {isExpert && <UserSafetyScoreWidget history={history} themeMode={themeMode} />}
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
-      {/* Kontrola inzerátu je první obsah na hlavní stránce. */}
+    <>
       <div
-        className={`rounded-3xl p-6 sm:p-4 lg:p-6 shadow-2xl border transition-all ${
+        className={`sg-check-card rounded-3xl p-3 md:p-4 lg:p-5 min-[1920px]:p-6 shadow-2xl border ${
           isShadowGuard
             ? 'bg-[#121214] border-[#CD7F32]/50 text-slate-100 shadow-[0_0_35px_rgba(212,160,23,0.2)] shadowguard-bronze-border'
             : isCyber
@@ -419,23 +467,24 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
             : 'bg-[#121214] border-[#B8860B]/60 text-slate-100 shadowguard-bronze-border'
         }`}
       >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-3 mb-6 sm:mb-3 lg:mb-5 pb-4 sm:pb-2 lg:pb-4 border-b border-slate-800">
+      <div className="sg-check-fields">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3 mb-3 pb-3 border-b border-slate-800">
         <div>
-          <h2 className="text-2xl sm:text-xl lg:text-2xl font-black flex items-center gap-2">
-            <ShieldCheck className="w-7 h-7 text-emerald-400 shrink-0" />
+          <h2 className="text-xl md:text-2xl min-[1920px]:text-3xl font-black flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6 md:w-7 md:h-7 text-emerald-400 shrink-0" />
             Zadejte inzerát k prověření
           </h2>
-          <p className="text-sm mt-1 text-slate-400 max-sm:block hidden lg:block">
+          <p className="text-base mt-1 text-slate-400 hidden lg:block">
             Zkopírujte webový odkaz (URL), vložte text zprávy z WhatsAppu / SMS, nebo nahrajte fotku obrazovky.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center gap-2 w-full lg:w-auto lg:max-w-md">
           <button
             type="button"
             onClick={() => setShowPermissionCheck(!showPermissionCheck)}
             title="Jak povolit mikrofon v prohlížeči (Chrome/Safari/Edge)"
-            className={`inline-flex items-center gap-1.5 px-3 py-2.5 sm:py-1.5 lg:py-2.5 rounded-xl font-bold border text-sm whitespace-nowrap transition-all ${
+            className={`inline-flex items-center justify-center gap-1.5 px-3 min-h-11 rounded-xl font-bold border text-base md:text-sm whitespace-nowrap transition-all w-full md:w-auto ${
               micPermissionDenied || showPermissionCheck
                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
                 : 'bg-[#1C1C1E] text-slate-300 border-slate-800 hover:text-white'
@@ -448,7 +497,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           <button
             type="button"
             onClick={() => toggleSpeechRecognition('rawText')}
-            className={`inline-flex items-center gap-2 px-3.5 py-2.5 sm:py-1.5 lg:py-2.5 rounded-xl font-bold shadow-sm transition-all border text-sm whitespace-nowrap ${
+            className={`inline-flex items-center justify-center gap-2 px-3.5 min-h-11 rounded-xl font-bold shadow-sm transition-all border text-base md:text-sm whitespace-nowrap w-full md:w-auto ${
               listeningField === 'rawText'
                 ? 'bg-rose-600 text-white border-rose-400 animate-pulse ring-2 ring-rose-400'
                 : isCyber
@@ -474,7 +523,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           <button
             type="button"
             onClick={handlePasteClipboard}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 sm:py-1.5 lg:py-2.5 rounded-xl font-bold shadow-sm transition-all border text-sm whitespace-nowrap ${
+            className={`inline-flex items-center justify-center gap-2 px-4 min-h-11 rounded-xl font-bold shadow-sm transition-all border text-base md:text-sm whitespace-nowrap w-full md:w-auto ${
               isCyber
                 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/30'
                 : isContrast
@@ -505,18 +554,19 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
         />
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-3 lg:space-y-5">
+      <form id="sg-check-form" onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <div className="space-y-3 md:space-y-4 min-[1920px]:space-y-5">
         {/* URL Input */}
         <div>
-          <label className={`mb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 font-bold ${textClasses}`}>
+          <label className={`mb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-0.5 md:gap-2 font-bold ${textClasses}`}>
             <span className="flex items-center gap-2 min-w-0">
               <Link className="w-5 h-5 text-emerald-400 shrink-0" />
               1. Webový odkaz na inzerát (URL adresa)
             </span>
             <span className="text-xs text-slate-400 font-normal sm:shrink-0">(např. https://www.bazos.cz/...)</span>
           </label>
-          <div className="relative flex flex-col sm:flex-row sm:items-center gap-2">
-            <div className="relative min-w-0 w-full sm:flex-1">
+          <div className="relative flex flex-col md:flex-row md:items-center gap-2">
+            <div className="relative min-w-0 w-full md:flex-1">
               <input
                 type="text"
                 value={url}
@@ -525,7 +575,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
                   setErrorMsg('');
                 }}
                 placeholder="Vložte sem odkaz na inzerát (např. https://...)"
-                className={`w-full px-4 py-3.5 sm:py-2.5 lg:py-3.5 rounded-2xl border-2 transition-all font-mono text-base ${
+                className={`w-full px-4 py-3 min-h-11 rounded-2xl border-2 transition-all font-mono text-base ${
                   listeningField === 'url'
                     ? 'border-rose-500 ring-2 ring-rose-500/30 bg-rose-950/20'
                     : isCyber
@@ -551,7 +601,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               type="button"
               onClick={() => toggleSpeechRecognition('url')}
               title={listeningField === 'url' ? 'Zastavit diktování URL' : 'Diktovat webovou adresu'}
-              className={`p-3.5 sm:p-2 lg:p-3.5 rounded-2xl border-2 transition-all shrink-0 flex items-center justify-center ${
+              className={`p-3 min-h-11 min-w-11 rounded-2xl border-2 transition-all shrink-0 flex items-center justify-center ${
                 listeningField === 'url'
                   ? 'bg-rose-600 text-white border-rose-400 animate-pulse ring-2 ring-rose-400'
                   : isCyber
@@ -569,7 +619,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               onClick={handleCheckSslAndDomain}
               disabled={isCheckingSsl || !url.trim()}
               title="Okamžitě zkontrolovat SSL certifikát a stáří domény"
-              className={`px-3.5 py-3.5 sm:py-2 lg:py-3.5 rounded-2xl font-black border-2 transition-all shrink-0 flex items-center gap-2 text-sm ${
+              className={`px-3.5 py-3 min-h-11 rounded-2xl font-black border-2 transition-all shrink-0 flex items-center justify-center gap-2 text-base md:text-sm flex-1 md:flex-none ${
                 isCheckingSsl
                   ? 'bg-amber-600 text-white border-amber-400 opacity-80'
                   : isCyber
@@ -636,7 +686,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
 
         {/* Text Input */}
         <div>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-2">
             <label className={`font-bold flex items-center gap-2 min-w-0 ${textClasses}`}>
               <FileText className="w-5 h-5 text-emerald-400 shrink-0" />
               <span className="leading-snug">2. Text zprávy nebo popis inzerátu (volitelné)</span>
@@ -676,7 +726,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               }}
               rows={3}
               placeholder="Zkopírujte sem text zprávy od kupujícího/prodávajícího nebo jej nadiktejte mikrofónem..."
-              className={`w-full px-4 py-3 sm:py-2 lg:py-3 rounded-2xl border-2 transition-all min-h-[5.5rem] sm:min-h-[4rem] lg:min-h-[5.5rem] ${textClasses} ${
+              className={`w-full px-4 py-3 rounded-2xl border-2 transition-all min-h-[4.5rem] md:min-h-[5rem] min-[1920px]:min-h-[6rem] ${textClasses} ${
                 listeningField === 'rawText'
                   ? 'border-rose-500 ring-2 ring-rose-500/30 bg-rose-950/20'
                   : isCyber
@@ -702,7 +752,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               <Image className="w-5 h-5 text-emerald-400" />
               3. Snímek obrazovky e-shopu / Fotka (volitelné)
             </label>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            <div className="flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center gap-2">
               {/* Camera Photo Capture Button - Eshop Screen */}
               <button
                 type="button"
@@ -710,7 +760,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
                   setCameraTargetMode('eshop');
                   startCamera();
                 }}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-bold border text-sm whitespace-nowrap transition-all shadow-sm ${
+                className={`inline-flex items-center justify-center gap-1.5 px-3.5 min-h-11 rounded-xl font-bold border text-base md:text-sm whitespace-nowrap transition-all shadow-sm ${
                   isCyber
                     ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 hover:bg-cyan-500/30'
                     : isContrast
@@ -729,7 +779,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
                   setCameraTargetMode('ad');
                   startCamera();
                 }}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-bold border text-sm whitespace-nowrap transition-all shadow-sm ${
+                className={`inline-flex items-center justify-center gap-1.5 px-3.5 min-h-11 rounded-xl font-bold border text-base md:text-sm whitespace-nowrap transition-all shadow-sm ${
                   isCyber
                     ? 'bg-slate-900 text-slate-200 border-slate-700 hover:border-cyan-500'
                     : isContrast
@@ -742,7 +792,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               </button>
 
               <label
-                className={`cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-bold border text-sm whitespace-nowrap transition-all ${
+                className={`cursor-pointer inline-flex items-center justify-center gap-1.5 px-3.5 min-h-11 rounded-xl font-bold border text-base md:text-sm whitespace-nowrap transition-all ${
                   isCyber
                     ? 'bg-slate-900 border-slate-700 text-slate-200 hover:border-cyan-400'
                     : isContrast
@@ -956,12 +1006,15 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           </div>
         )}
 
-        {/* Primary Action Button */}
-        <div>
+        </div>
+      </form>
+      </div>
+        <div className="sg-check-cta pt-3">
           <button
             type="submit"
+            form="sg-check-form"
             disabled={isLoading}
-            className={`w-full py-4 sm:py-3 lg:py-4 px-6 rounded-2xl font-black text-xl sm:text-lg lg:text-xl shadow-2xl transition-all flex items-center justify-center gap-3 ${
+            className={`w-full min-h-12 md:min-h-[52px] min-[1920px]:min-h-16 py-3 px-4 md:px-6 rounded-2xl font-black text-lg md:text-xl min-[1920px]:text-2xl shadow-2xl transition-all flex items-center justify-center gap-3 ${
               isCyber
                 ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-slate-950 hover:brightness-110 shadow-[0_0_25px_rgba(16,185,129,0.5)] cyber-button-emerald'
                 : isContrast
@@ -973,55 +1026,8 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
             <span>{isLoading ? 'Prověřuji inzerát v AI síti...' : 'PROVĚŘIT DŮVĚRYHODNOST INZERÁTU'}</span>
           </button>
         </div>
-      </form>
       </div>
-
-      {/* Pod první obrazovkou — ukázky, skóre */}
-      <div className="mt-8 pt-2">
-        <p className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-cyan-400" />
-          Vyzkoušejte ukázkové inzeráty (1 kliknutí):
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-          {SAMPLE_SCENARIOS.map((sc) => (
-            <button
-              key={sc.id}
-              type="button"
-              onClick={() => handleSelectScenario(sc)}
-              className={`text-left p-3 rounded-xl border text-xs sm:text-sm transition-all duration-200 flex flex-col justify-between ${
-                isCyber
-                  ? 'bg-slate-900/80 border-slate-800 hover:border-cyan-400 hover:shadow-[0_0_15px_rgba(6,182,212,0.35)] hover:-translate-y-0.5 text-slate-200'
-                  : isContrast
-                  ? 'bg-slate-900 border-slate-700 hover:border-yellow-400 text-slate-200'
-                  : 'bg-[#1C1C1E] hover:bg-[#252528] border-[#B8860B]/40 hover:border-[#00F5FF] text-slate-200'
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="font-bold text-white truncate">
-                    {sc.title}
-                  </span>
-                  <span
-                    className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
-                      sc.badge === 'PODVOD'
-                        ? 'bg-rose-950 text-rose-300 border border-rose-500/40'
-                        : sc.badge === 'OPATRNOSTI'
-                        ? 'bg-amber-950 text-amber-300 border border-amber-500/40'
-                        : 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
-                    }`}
-                  >
-                    {sc.badge}
-                  </span>
-                </div>
-                <p className="text-slate-400 text-xs line-clamp-1">{sc.subtitle}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {isExpert && <UserSafetyScoreWidget history={history} themeMode={themeMode} />}
-    </div>
+      {extrasTarget ? createPortal(extras, extrasTarget) : extras}
+    </>
   );
 };
