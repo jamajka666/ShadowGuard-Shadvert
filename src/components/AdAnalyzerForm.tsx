@@ -405,11 +405,18 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
 
   const isExpert = userRoleMode === 'expert';
 
+  const stageCard =
+    isShadowGuard || (!isCyber && !isContrast)
+      ? 'bg-[#121214]'
+      : isCyber
+        ? 'bg-slate-950'
+        : 'bg-black';
+
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col flex-1 min-h-0 w-full">
       {/* Kontrola inzerátu je první obsah na hlavní stránce. */}
       <div
-        className={`rounded-3xl p-6 sm:p-8 shadow-2xl border transition-all ${
+        className={`rounded-3xl p-5 sm:p-6 shadow-2xl border transition-all flex flex-col flex-1 min-h-0 ${
           isShadowGuard
             ? 'bg-[#121214] border-[#CD7F32]/50 text-slate-100 shadow-[0_0_35px_rgba(212,160,23,0.2)] shadowguard-bronze-border'
             : isCyber
@@ -419,13 +426,13 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
             : 'bg-[#121214] border-[#B8860B]/60 text-slate-100 shadowguard-bronze-border'
         }`}
       >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800 shrink-0">
         <div>
           <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2">
             <ShieldCheck className="w-7 h-7 text-emerald-400 shrink-0" />
             Zadejte inzerát k prověření
           </h2>
-          <p className="text-sm mt-1 text-slate-400">
+          <p className="text-sm mt-1 text-slate-400 hidden sm:block">
             Zkopírujte webový odkaz (URL), vložte text zprávy z WhatsAppu / SMS, nebo nahrajte fotku obrazovky.
           </p>
         </div>
@@ -505,7 +512,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
         />
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 space-y-4 sm:space-y-5">
         {/* URL Input */}
         <div>
           <label className={`mb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 font-bold ${textClasses}`}>
@@ -956,12 +963,14 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           </div>
         )}
 
-        {/* Primary Action Button */}
-        <div>
+        {/* Primary Action Button — vždy viditelné na první obrazovce */}
+        <div
+          className={`mt-auto sticky bottom-0 z-10 pt-3 -mx-5 sm:-mx-6 px-5 sm:px-6 pb-[max(0.5rem,env(safe-area-inset-bottom))] ${stageCard}`}
+        >
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full py-4 px-6 rounded-2xl font-black text-lg sm:text-xl shadow-2xl transition-all flex items-center justify-center gap-3 ${
+            className={`w-full py-3.5 sm:py-4 px-6 rounded-2xl font-black text-base sm:text-xl shadow-2xl transition-all flex items-center justify-center gap-3 ${
               isCyber
                 ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-slate-950 hover:brightness-110 shadow-[0_0_25px_rgba(16,185,129,0.5)] cyber-button-emerald'
                 : isContrast
@@ -974,9 +983,10 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           </button>
         </div>
       </form>
+      </div>
 
-      {/* Predefined Scenarios / Quick Test Chips */}
-      <div className="mt-8 pt-6 border-t border-slate-800">
+      {/* Pod první obrazovkou — ukázky, skóre */}
+      <div className="mt-8 pt-2">
         <p className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-cyan-400" />
           Vyzkoušejte ukázkové inzeráty (1 kliknutí):
@@ -1019,10 +1029,8 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           ))}
         </div>
       </div>
-    </div>
 
-    {/* Detailní režim: týdenní skóre až na konci bloku. */}
-    {isExpert && <UserSafetyScoreWidget history={history} themeMode={themeMode} />}
+      {isExpert && <UserSafetyScoreWidget history={history} themeMode={themeMode} />}
     </div>
   );
 };

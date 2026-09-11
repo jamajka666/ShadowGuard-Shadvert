@@ -569,7 +569,7 @@ export default function App() {
       </nav>
 
       {/* Main Content Area */}
-      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-10 flex-1">
+      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-3 sm:py-4 flex-1 flex flex-col">
         {activeTab === 'analyzer' && (
           <div>
             {isLoading ? (
@@ -621,7 +621,7 @@ export default function App() {
                 </div>
               )
             ) : (
-              <div>
+              <div className="flex flex-col gap-8">
                 {analyzeError && (
                   <div
                     role="alert"
@@ -638,18 +638,20 @@ export default function App() {
                     </button>
                   </div>
                 )}
-                <AdAnalyzerForm
-                  onAnalyze={handleAnalyze}
-                  isLoading={isLoading}
-                  fontSize={uiFontSize}
-                  themeMode={themeMode}
-                  history={history}
-                  userRoleMode={userRoleMode}
-                  onOpenSendToSon={(customText) => {
-                    setSendToSonCustomText(customText);
-                    setIsSendToSonOpen(true);
-                  }}
-                />
+                <div className="sg-home-stage">
+                  <AdAnalyzerForm
+                    onAnalyze={handleAnalyze}
+                    isLoading={isLoading}
+                    fontSize={uiFontSize}
+                    themeMode={themeMode}
+                    history={history}
+                    userRoleMode={userRoleMode}
+                    onOpenSendToSon={(customText) => {
+                      setSendToSonCustomText(customText);
+                      setIsSendToSonOpen(true);
+                    }}
+                  />
+                </div>
 
                 {!isSimpleMode && <FamilySettingsCard />}
 

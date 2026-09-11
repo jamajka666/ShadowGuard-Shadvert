@@ -19,11 +19,19 @@ html[data-font-size="xlarge"] {
   font-size: 137.5%; /* ~22px — A++ (+38 % vs A, jen desktop) */
 }
 
-/* Telefon / úzký displej: A++ se nepoužívá — max A+, ať se nerozhází layout */
+/* Telefon / úzký displej: A++ = A+; A+ o něco větší, ať to není mrňavé */
 @media (max-width: 640px) {
+  html[data-font-size="large"],
   html[data-font-size="xlarge"] {
-    font-size: 118.75%; /* stejné jako A+ */
+    font-size: 125%;
   }
+}
+
+/* První obrazovka: od headeru po tlačítko Prověřit, bez scrollu */
+.sg-home-stage {
+  min-height: calc(100svh - 9.25rem);
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes cyber-pulse {
