@@ -479,12 +479,12 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center gap-2 w-full lg:w-auto lg:max-w-md">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:max-w-md">
           <button
             type="button"
             onClick={() => setShowPermissionCheck(!showPermissionCheck)}
             title="Jak povolit mikrofon v prohlížeči (Chrome/Safari/Edge)"
-            className={`inline-flex items-center justify-center gap-1.5 px-3 min-h-11 rounded-xl font-bold border text-base md:text-sm whitespace-nowrap transition-all w-full md:w-auto ${
+            className={`inline-flex items-center justify-center gap-1.5 px-3 min-h-11 rounded-xl font-bold border text-base md:text-sm whitespace-nowrap transition-all ${
               micPermissionDenied || showPermissionCheck
                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
                 : 'bg-[#1C1C1E] text-slate-300 border-slate-800 hover:text-white'
@@ -497,7 +497,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           <button
             type="button"
             onClick={() => toggleSpeechRecognition('rawText')}
-            className={`inline-flex items-center justify-center gap-2 px-3.5 min-h-11 rounded-xl font-bold shadow-sm transition-all border text-base md:text-sm whitespace-nowrap w-full md:w-auto ${
+            className={`inline-flex items-center justify-center gap-2 px-3.5 min-h-11 rounded-xl font-bold shadow-sm transition-all border text-base md:text-sm whitespace-nowrap ${
               listeningField === 'rawText'
                 ? 'bg-rose-600 text-white border-rose-400 animate-pulse ring-2 ring-rose-400'
                 : isCyber
@@ -523,7 +523,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
           <button
             type="button"
             onClick={handlePasteClipboard}
-            className={`inline-flex items-center justify-center gap-2 px-4 min-h-11 rounded-xl font-bold shadow-sm transition-all border text-base md:text-sm whitespace-nowrap w-full md:w-auto ${
+            className={`inline-flex items-center justify-center gap-2 px-4 min-h-11 rounded-xl font-bold shadow-sm transition-all border text-base md:text-sm whitespace-nowrap ${
               isCyber
                 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/30'
                 : isContrast
@@ -752,7 +752,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
               <Image className="w-5 h-5 text-emerald-400" />
               3. Snímek obrazovky e-shopu / Fotka (volitelné)
             </label>
-            <div className="flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {/* Camera Photo Capture Button - Eshop Screen */}
               <button
                 type="button"
@@ -1014,7 +1014,7 @@ export const AdAnalyzerForm: React.FC<AdAnalyzerFormProps> = ({
             type="submit"
             form="sg-check-form"
             disabled={isLoading}
-            className={`w-full min-h-12 md:min-h-[52px] min-[1920px]:min-h-16 py-3 px-4 md:px-6 rounded-2xl font-black text-lg md:text-xl min-[1920px]:text-2xl shadow-2xl transition-all flex items-center justify-center gap-3 ${
+            className={`w-full min-h-12 md:min-h-[52px] min-[1920px]:min-h-16 py-2.5 md:py-3 px-3 md:px-6 rounded-2xl font-black text-base leading-tight md:text-xl min-[1920px]:text-2xl shadow-2xl transition-all flex items-center justify-center gap-2 md:gap-3 ${
               isCyber
                 ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-slate-950 hover:brightness-110 shadow-[0_0_25px_rgba(16,185,129,0.5)] cyber-button-emerald'
                 : isContrast

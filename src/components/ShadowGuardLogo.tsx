@@ -12,7 +12,7 @@ export const ShadowGuardLogo: React.FC<ShadowGuardLogoProps> = ({
   className = '',
 }) => {
   const iconSize = size === 'sm' ? 'w-8 h-8' : size === 'lg' ? 'w-14 h-14' : 'w-9 h-9 md:w-10 md:h-10 min-[1920px]:w-12 min-[1920px]:h-12';
-  const titleSize = size === 'sm' ? 'text-lg' : size === 'lg' ? 'text-3xl' : 'text-xl md:text-2xl min-[1920px]:text-3xl';
+  const titleSize = size === 'sm' ? 'text-lg' : size === 'lg' ? 'text-3xl' : 'text-lg md:text-xl lg:text-2xl min-[1920px]:text-3xl';
   const [imgOk, setImgOk] = React.useState(true);
 
   return (
